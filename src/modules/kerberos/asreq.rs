@@ -26,6 +26,10 @@ pub const PA_ENC_TIMESTAMP: i64 = 2;
 // ─── DER encoding helpers ────────────────────────────────────────────────────
 
 fn length_bytes(len: usize) -> Vec<u8> {
+    // DER length encoding: max 16MB (0xFFFFFF bytes)
+    if len > 0xffffff {
+        panic!("DER length {} exceeds max (16MB)", len);
+    }
     if len <= 0x7f {
         vec![len as u8]
     } else if len <= 0xff {

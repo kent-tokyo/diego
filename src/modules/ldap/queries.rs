@@ -171,11 +171,15 @@ pub async fn query_stale_service_passwords(ldap: &mut Ldap, base_dn: &str) -> an
 }
 
 /// Convert a "N days ago" offset to a Windows FILETIME integer string.
-/// Windows epoch: 1601-01-01 00:00:00 UTC
-/// Difference from Unix epoch: 116444736000000000 * 100-ns intervals
+/// Uses checked arithmetic to prevent overflow.
 fn windows_timestamp_days_ago(days: u64) -> i64 {
-    let unix_secs = chrono::Utc::now().timestamp() - (days as i64 * 86400);
-    (unix_secs * 10_000_000) + 116_444_736_000_000_000
+    // Fallback: manually implement overflow-checked calculation
+    let days_secs = (days as i64).saturating_mul(86400);
+    let now_secs = chrono::Utc::now().timestamp();
+    let past_secs = now_secs.saturating_sub(days_secs);
+    past_secs
+        .saturating_mul(10_000_000)
+        .saturating_add(116_444_736_000_000_000)
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────

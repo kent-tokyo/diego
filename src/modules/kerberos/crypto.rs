@@ -140,6 +140,9 @@ fn hmac_md5(key: &[u8], data: &[u8]) -> [u8; 16] {
 }
 
 fn rc4_inplace(key: &[u8], data: &mut [u8]) {
+    if key.is_empty() {
+        return; // RC4 with empty key is no-op
+    }
     let mut s: [u8; 256] = core::array::from_fn(|i| i as u8);
     let mut j = 0usize;
     for i in 0..256 {
@@ -179,6 +182,9 @@ pub fn rc4_hmac_decrypt(key: &[u8], key_usage: u32, ciphertext: &[u8]) -> anyhow
     rc4_inplace(&k3, &mut plaintext);
     if hmac_md5(&k1, &plaintext) != checksum {
         anyhow::bail!("RC4-HMAC checksum mismatch");
+    }
+    if plaintext.len() < 8 {
+        anyhow::bail!("RC4-HMAC plaintext too short (missing 8-byte confounder)");
     }
     Ok(plaintext[8..].to_vec())
 }

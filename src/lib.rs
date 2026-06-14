@@ -5,3 +5,4 @@ pub mod error;
 pub mod modules;
 pub mod mcp;
 pub mod report;
+pub mod utils;

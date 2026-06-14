@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::Parser;
+use zeroize::ZeroizeOnDrop;
 
 #[derive(Parser, Debug)]
 #[command(

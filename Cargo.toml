@@ -64,6 +64,10 @@ md4 = "0.10"
 hmac = "0.12"
 digest = "0.10"
 
+# Security: credential zeroization
+zeroize = { version = "1.8", features = ["derive"] }
+subtle = "2.6"  # Constant-time comparison
+
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.48", features = [
     "Win32_NetworkManagement_NetManagement",
