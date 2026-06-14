@@ -425,3 +425,325 @@ fn frame_kerberos_tcp(data: Vec<u8>) -> Vec<u8> {
     out.extend_from_slice(&data);
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─── Phase 1: Authenticator Construction Tests ────────────────────────
+
+    #[test]
+    fn test_parse_spn_with_port() {
+        let (parts, host) = parse_spn("MSSQLSvc/db01.corp.local:1433");
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], "MSSQLSvc");
+        assert_eq!(parts[1], "db01.corp.local:1433");
+        assert_eq!(host, "db01.corp.local:1433");
+    }
+
+    #[test]
+    fn test_parse_spn_without_slash() {
+        let (parts, host) = parse_spn("ldap");
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0], "ldap");
+        assert_eq!(host, "ldap");
+    }
+
+    #[test]
+    fn test_parse_spn_simple_host() {
+        let (parts, host) = parse_spn("ldap/dc01");
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], "ldap");
+        assert_eq!(parts[1], "dc01");
+        assert_eq!(host, "dc01");
+    }
+
+    #[test]
+    fn test_parse_spn_with_multiple_slashes() {
+        // Only first / matters for SPN parsing
+        let (parts, _host) = parse_spn("HTTP/host/path");
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], "HTTP");
+        assert_eq!(parts[1], "host/path");
+    }
+
+    #[test]
+    fn test_current_kerberos_time_format() {
+        let time = current_kerberos_time();
+        // Format: YYYYMMDDHHmmssZ
+        assert_eq!(time.len(), 15, "Kerberos time should be 15 chars: {}", time);
+        assert!(time.ends_with('Z'), "Should end with Z: {}", time);
+        // Should be parseable as numbers (except Z)
+        let _ = time[..14].parse::<u64>().expect("Should be numeric");
+    }
+
+    #[test]
+    fn test_frame_kerberos_tcp_adds_length_prefix() {
+        let data = vec![0x6a, 0x82, 0x01, 0x00]; // 4-byte payload
+        let framed = frame_kerberos_tcp(data.clone());
+
+        // Should be 4 (length prefix) + 4 (payload) = 8 bytes
+        assert_eq!(framed.len(), 8);
+
+        // First 4 bytes = big-endian length of payload
+        let prefix = u32::from_be_bytes(framed[..4].try_into().unwrap());
+        assert_eq!(prefix as usize, 4);
+
+        // Rest is original data
+        assert_eq!(&framed[4..], &data[..]);
+    }
+
+    #[test]
+    fn test_frame_kerberos_tcp_large_payload() {
+        let data = vec![0u8; 65536]; // 64KB payload
+        let framed = frame_kerberos_tcp(data.clone());
+
+        let prefix = u32::from_be_bytes(framed[..4].try_into().unwrap());
+        assert_eq!(prefix as usize, 65536);
+        assert_eq!(framed.len(), 4 + 65536);
+    }
+
+    // ─── Phase 2: TGS-REQ Construction Tests ─────────────────────────────
+
+    #[test]
+    fn test_build_authenticated_asreq_basic() {
+        let req = build_authenticated_asreq("alice", "CORP.LOCAL", "Password123", 0x12345678);
+
+        // Should have TCP framing: 4-byte length prefix
+        assert!(req.len() > 4);
+        let body_len = u32::from_be_bytes(req[..4].try_into().unwrap()) as usize;
+        assert_eq!(body_len, req.len() - 4);
+
+        // Should start with APPLICATION [10] after framing (0x6a)
+        assert_eq!(req[4], 0x6a, "Should be APPLICATION [10]");
+    }
+
+    #[test]
+    fn test_build_authenticated_asreq_different_realms() {
+        let req1 = build_authenticated_asreq("user", "CORP.LOCAL", "pass", 0x1);
+        let req2 = build_authenticated_asreq("user", "EXAMPLE.COM", "pass", 0x1);
+
+        // Different realms should produce different requests
+        assert_ne!(req1, req2);
+        assert!(req1.len() > 0 && req2.len() > 0);
+    }
+
+    #[test]
+    fn test_build_authenticated_asreq_different_passwords() {
+        let req1 = build_authenticated_asreq("user", "CORP.LOCAL", "pass1", 0x1);
+        let req2 = build_authenticated_asreq("user", "CORP.LOCAL", "pass2", 0x1);
+
+        // Different passwords should produce different requests
+        assert_ne!(req1, req2);
+    }
+
+    #[test]
+    fn test_build_authenticated_asreq_different_nonces() {
+        let req1 = build_authenticated_asreq("user", "CORP.LOCAL", "pass", 0x11111111);
+        let req2 = build_authenticated_asreq("user", "CORP.LOCAL", "pass", 0x22222222);
+
+        // Different nonces should produce different requests
+        assert_ne!(req1, req2);
+    }
+
+    #[test]
+    fn test_build_tgsreq_basic() {
+        // Mock TGT ticket and session key
+        let tgt_ticket = vec![0x61, 0x82, 0x01, 0x00]; // Fake ticket
+        let session_key = vec![0u8; 16]; // 16-byte RC4 key
+
+        let req = build_tgsreq(
+            "alice",
+            "CORP.LOCAL",
+            "ldap/dc01.corp.local",
+            &tgt_ticket,
+            &session_key,
+            0xdeadbeef,
+        );
+
+        // Should have TCP framing
+        assert!(req.len() > 4);
+        let body_len = u32::from_be_bytes(req[..4].try_into().unwrap()) as usize;
+        assert_eq!(body_len, req.len() - 4);
+
+        // Should start with APPLICATION [12] = 0x6c
+        assert_eq!(req[4], 0x6c, "Should be APPLICATION [12] for TGS-REQ");
+    }
+
+    #[test]
+    fn test_build_tgsreq_different_spns() {
+        let tgt_ticket = vec![0x61, 0x82, 0x01, 0x00];
+        let session_key = vec![0u8; 16];
+
+        let req1 = build_tgsreq("alice", "CORP.LOCAL", "ldap/dc01", &tgt_ticket, &session_key, 0x1);
+        let req2 = build_tgsreq("alice", "CORP.LOCAL", "http/web01", &tgt_ticket, &session_key, 0x1);
+
+        // Different SPNs should produce different requests
+        assert_ne!(req1, req2);
+    }
+
+    #[test]
+    fn test_build_tgsreq_different_session_keys() {
+        let tgt_ticket = vec![0x61, 0x82, 0x01, 0x00];
+        let key1 = vec![0u8; 16];
+        let key2 = vec![1u8; 16];
+
+        let req1 = build_tgsreq("alice", "CORP.LOCAL", "ldap/dc01", &tgt_ticket, &key1, 0x1);
+        let req2 = build_tgsreq("alice", "CORP.LOCAL", "ldap/dc01", &tgt_ticket, &key2, 0x1);
+
+        // Different session keys should produce different requests (Authenticator encrypted differently)
+        assert_ne!(req1, req2);
+    }
+
+    // ─── Phase 3: TGS-REP Parsing Tests ──────────────────────────────────
+
+    #[test]
+    fn test_read_tlv_basic() {
+        // TLV: tag=0x30 (SEQUENCE), length=2, value=[0x01, 0x02]
+        let data = vec![0x30, 0x02, 0x01, 0x02, 0xFF];
+        let (tag, value, rest) = read_tlv(&data).unwrap();
+
+        assert_eq!(tag, 0x30);
+        assert_eq!(value, &[0x01, 0x02]);
+        assert_eq!(rest, &[0xFF]);
+    }
+
+    #[test]
+    fn test_read_tlv_truncated_data() {
+        // TLV claims 10 bytes but only has 2
+        let data = vec![0x30, 0x0a, 0x01];
+        assert!(read_tlv(&data).is_err(), "Should fail on truncated value");
+    }
+
+    #[test]
+    fn test_read_tlv_empty_data() {
+        let data = vec![];
+        assert!(read_tlv(&data).is_err(), "Should fail on empty data");
+    }
+
+    #[test]
+    fn test_read_tlv_only_tag() {
+        let data = vec![0x30];
+        assert!(read_tlv(&data).is_err(), "Should fail with only tag");
+    }
+
+    #[test]
+    fn test_read_length_short_form() {
+        // Short form: length byte directly (0x00-0x7f)
+        let data = vec![0x05, 0x01, 0x02, 0x03, 0x04, 0x05, 0xFF];
+        let (len, rest) = read_length(&data).unwrap();
+
+        assert_eq!(len, 5);
+        assert_eq!(rest, &[0x01, 0x02, 0x03, 0x04, 0x05, 0xFF]);
+    }
+
+    #[test]
+    fn test_read_length_one_byte_form() {
+        // Long form: 0x81 = 1-byte length follows
+        let data = vec![0x81, 0x80, 0x01, 0x02]; // length = 0x80 = 128
+        let (len, rest) = read_length(&data).unwrap();
+
+        assert_eq!(len, 0x80);
+        assert_eq!(rest, &[0x01, 0x02]);
+    }
+
+    #[test]
+    fn test_read_length_two_byte_form() {
+        // Long form: 0x82 = 2-byte length follows
+        let data = vec![0x82, 0x01, 0x00, 0xFF]; // length = 0x0100 = 256
+        let (len, rest) = read_length(&data).unwrap();
+
+        assert_eq!(len, 256);
+        assert_eq!(rest, &[0xFF]);
+    }
+
+    #[test]
+    fn test_read_length_truncated() {
+        // Claims 2-byte length but only 1 byte follows
+        let data = vec![0x82, 0x01];
+        assert!(read_length(&data).is_err(), "Should fail on truncated length");
+    }
+
+    #[test]
+    fn test_read_length_empty() {
+        let data = vec![];
+        assert!(read_length(&data).is_err(), "Should fail on empty data");
+    }
+
+    #[test]
+    fn test_parse_tgsrep_enc_part_invalid_tag() {
+        // Wrong APPLICATION tag (0x6b = AS-REP instead of 0x6d = TGS-REP)
+        let data = vec![0x6b, 0x01, 0x00];
+        assert!(parse_tgsrep_enc_part(&data).is_err(), "Should reject wrong tag");
+    }
+
+    #[test]
+    fn test_parse_tgsrep_enc_part_truncated() {
+        // Valid tag but truncated data
+        let data = vec![0x6d];
+        assert!(parse_tgsrep_enc_part(&data).is_err(), "Should fail on truncated data");
+    }
+
+    #[test]
+    fn test_decrypt_asrep_basic() {
+        // This test verifies RC4-HMAC decryption path with key_usage = 3
+        // We can't test without a real encrypted AS-REP, but we can verify error handling
+
+        let ciphertext = vec![0u8; 16]; // Too short to be valid (needs >= 24 bytes)
+        let result = decrypt_asrep(&ciphertext, "password");
+
+        // Should fail on bounds check
+        assert!(result.is_err(), "Ciphertext too short should fail");
+    }
+
+    #[test]
+    fn test_build_principal_name_structure() {
+        // Verify principal name encoding produces valid DER
+        let name = build_principal_name(NT_PRINCIPAL, &["alice"]);
+
+        // Should be non-empty DER-encoded structure
+        assert!(!name.is_empty());
+
+        // Should start with SEQUENCE tag (0x30)
+        assert_eq!(name[0], 0x30, "Principal name should be SEQUENCE");
+    }
+
+    #[test]
+    fn test_build_principal_name_multiple_parts() {
+        let name = build_principal_name(NT_SRV_INST, &["krbtgt", "CORP.LOCAL"]);
+
+        assert!(!name.is_empty());
+        assert_eq!(name[0], 0x30);
+    }
+
+    // ─── Phase 4: Integration Scenarios ──────────────────────────────────
+
+    #[test]
+    fn test_tgt_session_structure() {
+        // Verify TgtSession can be created and cloned
+        let session = TgtSession {
+            ticket_der: vec![0x61, 0x82, 0x01, 0x00],
+            session_key: vec![0u8; 16],
+        };
+
+        let cloned = session.clone();
+        assert_eq!(session.ticket_der, cloned.ticket_der);
+        assert_eq!(session.session_key, cloned.session_key);
+    }
+
+    #[test]
+    fn test_spn_account_integration() {
+        // Verify module integration with SpnAccount type
+        use crate::modules::SpnAccount;
+
+        let account = SpnAccount {
+            sam_name: "sqlserver$".to_string(),
+            spns: vec!["MSSQLSvc/db01.corp.local:1433".to_string()],
+            supported_enc_types: 0, // 0 = unknown/legacy (RC4 ok)
+        };
+
+        assert_eq!(account.sam_name, "sqlserver$");
+        assert_eq!(account.spns.len(), 1);
+        assert_eq!(account.supported_enc_types, 0);
+    }
+}

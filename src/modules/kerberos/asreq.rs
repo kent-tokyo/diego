@@ -507,4 +507,15 @@ mod tests {
         let (len, _rest) = read_length(&data).unwrap();
         assert_eq!(len, 65536, "3-byte length should decode correctly");
     }
+
+    #[test]
+    fn test_read_tlv_multi_byte_length() {
+        // Test TLV with 2-byte length encoding
+        let mut data = vec![0x04, 0x82, 0x01, 0x00]; // OCTET STRING, length=256 (2-byte)
+        data.extend(vec![0u8; 256]); // 256-byte value
+        let (tag, value, _rest) = read_tlv(&data).unwrap();
+
+        assert_eq!(tag, 0x04);
+        assert_eq!(value.len(), 256);
+    }
 }
