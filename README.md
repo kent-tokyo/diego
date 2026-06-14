@@ -34,6 +34,249 @@ diego --mcp
 
 ---
 
+## CLI Usage & Examples
+
+### Syntax
+
+```bash
+diego [OPTIONS]
+```
+
+### Required Options (for CLI mode)
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--dc <DC>` | Domain Controller IP address | `--dc 10.0.0.1` |
+| `--domain <DOMAIN>` | Domain name | `--domain corp.local` |
+| `--username <USERNAME>` | Domain user for authentication | `--username jdoe` |
+| `--password <PASSWORD>` | Password (or `DIEGO_PASSWORD` env var) | `--password 'P@ssw0rd'` |
+
+### Optional Parameters
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--modules <MODULES>` | `all` | Specific modules: `kerberos`, `ldap`, `passive`, or `all` |
+| `--output <OUTPUT>` | `stdout` | Output file path |
+| `--format <FORMAT>` | `json` | Output format: `json` or `markdown` |
+| `--timeout <TIMEOUT>` | `10` | Per-query timeout in seconds |
+| `--interface <INTERFACE>` | Auto-detect | Network interface for passive listening |
+| `--ai-model <AI_MODEL>` | `claude-sonnet-4-6` | Claude model for analysis |
+
+### Examples
+
+#### 1. Full Scan (All Modules)
+
+Run all diagnostic modules and output JSON findings:
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --format json --output findings.json
+```
+
+**Sample Output (JSON):**
+```json
+{
+  "domain": "corp.local",
+  "dc_ip": "10.0.0.1",
+  "timestamp": "2025-06-14T10:30:45Z",
+  "modules_run": ["ldap", "kerberos", "passive"],
+  "findings": [
+    {
+      "id": "LDAP-ASREP-candidate-001",
+      "severity": "Critical",
+      "title": "AS-REP Roastable Account Detected",
+      "description": "Account 'svc_backup' has Kerberos pre-authentication disabled",
+      "affected_object": "svc_backup",
+      "object_type": "user",
+      "mitre_tactic": "T1558.001",
+      "mitre_technique": "Steal or Forge Kerberos Tickets / AS-REP Roasting",
+      "remediation": "Enable Kerberos pre-authentication on the account"
+    },
+    {
+      "id": "KRB-ASREP-HASH-svc_backup",
+      "severity": "Critical",
+      "title": "AS-REP Hash Captured",
+      "description": "Kerberos AS-REP hash captured for offline cracking",
+      "affected_object": "svc_backup",
+      "object_type": "hash",
+      "hash_value": "$krb5asrep$23$svc_backup@CORP.LOCAL:...",
+      "mitre_tactic": "T1558.001"
+    },
+    {
+      "id": "LDAP-UNCONSTRAINED-admin-host-01",
+      "severity": "High",
+      "title": "Unconstrained Delegation Detected",
+      "description": "Computer account 'admin-host-01' has unconstrained delegation enabled",
+      "affected_object": "admin-host-01",
+      "object_type": "computer",
+      "mitre_tactic": "T1187"
+    }
+  ],
+  "summary": {
+    "total_findings": 3,
+    "critical": 2,
+    "high": 1,
+    "medium": 0,
+    "low": 0
+  }
+}
+```
+
+#### 2. Kerberos-Only Scan
+
+Target specific attacks (AS-REP Roasting + Kerberoasting):
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --modules kerberos \
+  --output kerb_hashes.json
+```
+
+Produces Hashcat-compatible hashes (`$krb5asrep$`, `$krb5tgs$`) for offline cracking.
+
+#### 3. LDAP Enumeration Only
+
+Map AD topology and extract policy information:
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --modules ldap \
+  --format markdown --output domain_report.md
+```
+
+**Discoveries include:**
+- Domain controllers and site topology
+- Password policy (lockout threshold, age, complexity)
+- Unconstrained delegation accounts
+- SPNs and service accounts
+- High-privilege group members
+- Description field credential leaks
+
+#### 4. Passive Monitoring (LLMNR/NBT-NS)
+
+Capture broadcast-based DNS requests to identify spoofing targets:
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --modules passive \
+  --interface eth0 \
+  --timeout 30
+```
+
+Detects:
+- Unresolved hostname queries (LLMNR/NBT-NS)
+- Cleartext protocol usage (HTTP auth, FTP, SMTP, Telnet credentials)
+- Hosts susceptible to responder-based attacks
+
+#### 5. AI-Powered Attack Narrative
+
+Analyze findings and synthesize attack paths:
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --ai-analyze \
+  --format markdown --output attack_narrative.md
+```
+
+**AI Output Example:**
+```
+## Attack Narrative: CORP.LOCAL
+
+### Executive Summary
+The domain has 3 critical misconfigurations enabling rapid escalation to Domain Admin.
+
+### Attack Chain
+1. **Initial Access** — AS-REP roast 'svc_backup' account (pre-auth disabled)
+2. **Privilege Escalation** — Kerberoast 'ms-sql-svc' (weak password)
+3. **Lateral Movement** — Use roasted ticket + unconstrained delegation on 'admin-host-01'
+4. **Domain Compromise** — Steal KRBTGT key via DCSync
+
+### Top 5 Remediations (by impact)
+1. Enable Kerberos pre-authentication (blocks AS-REP)
+2. Rotate service account passwords and enforce complexity
+3. Disable unconstrained delegation; use constrained delegation instead
+...
+```
+
+#### 6. Interactive AI Chat
+
+Explore findings interactively:
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --chat
+```
+
+Then ask Claude:
+```
+> What are the most critical risks?
+> Can you explain the Kerberoasting attack in detail?
+> What's the fastest path to Domain Admin?
+> How would EDR detect these techniques?
+```
+
+#### 7. Markdown Report (Human-Friendly)
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --format markdown --output findings.md
+```
+
+Outputs structured markdown with:
+- Executive summary
+- Findings grouped by severity
+- MITRE ATT&CK cross-references
+- Remediation steps for each finding
+- Network jitter / OPSEC notes
+
+#### 8. MCP Server Mode (LLM Integration)
+
+Run as an MCP server for Claude Desktop or custom LLM agents:
+
+```bash
+diego --mcp
+```
+
+Then in Claude, use tools like:
+- `enumerate_asrep_candidates` — List pre-auth disabled accounts
+- `run_asrep_roasting` — Execute AS-REP roasting
+- `run_kerberoasting` — Execute Kerberoasting attack
+- `check_password_policy` — Retrieve domain password policy
+- `enumerate_privileged_groups` — List DA/EA members
+
+#### 9. Custom Timeout & Jitter
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --timeout 20 \
+  --modules ldap
+```
+
+Timeout applies to individual LDAP queries. Internal jitter (100–500ms) is added between requests to blend with normal traffic.
+
+#### 10. Environment Variable for Password
+
+```bash
+export DIEGO_PASSWORD="MyP@ssw0rd"
+export DIEGO_USERNAME="jdoe"
+
+diego --dc 10.0.0.1 --domain corp.local
+```
+
+(Avoids passing credentials on command line—more OPSEC-friendly)
+
+---
+
 ## Diagnostic Modules
 
 ### Kerberos — `Asn1Kerberos`

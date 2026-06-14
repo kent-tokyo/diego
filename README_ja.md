@@ -34,6 +34,238 @@ diego --mcp
 
 ---
 
+## CLI 使用方法と実例
+
+### 構文
+
+```bash
+diego [OPTIONS]
+```
+
+### 必須オプション (CLI モード)
+
+| オプション | 説明 | 例 |
+|-----------|------|-----|
+| `--dc <DC>` | ドメインコントローラー IP アドレス | `--dc 10.0.0.1` |
+| `--domain <DOMAIN>` | ドメイン名 | `--domain corp.local` |
+| `--username <USERNAME>` | 認証用ドメインユーザー | `--username jdoe` |
+| `--password <PASSWORD>` | パスワード (`DIEGO_PASSWORD` 環境変数可) | `--password 'P@ssw0rd'` |
+
+### オプションパラメーター
+
+| オプション | デフォルト | 説明 |
+|-----------|----------|------|
+| `--modules <MODULES>` | `all` | 実行モジュール: `kerberos`, `ldap`, `passive`, `all` |
+| `--output <OUTPUT>` | 標準出力 | 出力ファイルパス |
+| `--format <FORMAT>` | `json` | 出力形式: `json` または `markdown` |
+| `--timeout <TIMEOUT>` | `10` | クエリタイムアウト (秒単位) |
+| `--interface <INTERFACE>` | 自動検出 | パッシブリスニング用ネットワークインターフェース |
+| `--ai-model <AI_MODEL>` | `claude-sonnet-4-6` | AI 分析用 Claude モデル |
+
+### 実例
+
+#### 1. 完全スキャン (全モジュール)
+
+すべての診断モジュールを実行し、JSON 形式で結果を出力:
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --format json --output findings.json
+```
+
+**出力例 (JSON):**
+```json
+{
+  "domain": "corp.local",
+  "dc_ip": "10.0.0.1",
+  "timestamp": "2025-06-14T10:30:45Z",
+  "modules_run": ["ldap", "kerberos", "passive"],
+  "findings": [
+    {
+      "id": "LDAP-ASREP-candidate-001",
+      "severity": "Critical",
+      "title": "AS-REP Roastable Account Detected",
+      "description": "Account 'svc_backup' has Kerberos pre-authentication disabled",
+      "affected_object": "svc_backup",
+      "object_type": "user",
+      "mitre_tactic": "T1558.001",
+      "mitre_technique": "Steal or Forge Kerberos Tickets / AS-REP Roasting",
+      "remediation": "Enable Kerberos pre-authentication on the account"
+    },
+    {
+      "id": "KRB-ASREP-HASH-svc_backup",
+      "severity": "Critical",
+      "title": "AS-REP Hash Captured",
+      "description": "Kerberos AS-REP hash captured for offline cracking",
+      "affected_object": "svc_backup",
+      "object_type": "hash",
+      "hash_value": "$krb5asrep$23$svc_backup@CORP.LOCAL:...",
+      "mitre_tactic": "T1558.001"
+    }
+  ],
+  "summary": {
+    "total_findings": 3,
+    "critical": 2,
+    "high": 1
+  }
+}
+```
+
+#### 2. Kerberos のみスキャン
+
+AS-REP Roasting と Kerberoasting を実行:
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --modules kerberos \
+  --output kerb_hashes.json
+```
+
+Hashcat 互換形式 (`$krb5asrep$`, `$krb5tgs$`) のハッシュを出力。
+
+#### 3. LDAP 列挙のみ
+
+AD トポロジーとポリシー情報をマップ:
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --modules ldap \
+  --format markdown --output domain_report.md
+```
+
+**検出される情報:**
+- ドメインコントローラーおよびサイトトポロジー
+- パスワードポリシー (ロックアウト閾値、経過期間、複雑性)
+- 制約なし委任アカウント
+- SPN およびサービスアカウント
+- 高権限グループメンバー
+- Description フィールド認証情報漏洩
+
+#### 4. パッシブ監視 (LLMNR/NBT-NS)
+
+ブロードキャストベース DNS リクエストをキャプチャ:
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --modules passive \
+  --interface eth0 \
+  --timeout 30
+```
+
+検出対象:
+- 未解決ホスト名クエリ (LLMNR/NBT-NS)
+- クリアテキストプロトコル使用 (HTTP auth、FTP、SMTP、Telnet 認証情報)
+- Responder 攻撃に対して脆弱なホスト
+
+#### 5. AI による攻撃ナラティブ
+
+findings を分析し、攻撃パスを合成:
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --ai-analyze \
+  --format markdown --output attack_narrative.md
+```
+
+**AI 出力例:**
+```
+## 攻撃ナラティブ: CORP.LOCAL
+
+### エグゼクティブサマリー
+ドメインには、ドメイン管理者への迅速なエスカレーションを可能にする 3 つの重大な設定ミスがあります。
+
+### 攻撃チェーン
+1. **初期アクセス** — 'svc_backup' アカウントを AS-REP roast (事前認証無効)
+2. **権限昇格** — 'ms-sql-svc' を Kerberoast (弱いパスワード)
+3. **横展開** — Roasted チケット + 'admin-host-01' の制約なし委任を使用
+4. **ドメイン侵害** — DCSync 経由で KRBTGT キーを盗む
+
+### トップ 5 復旧方法 (影響度順)
+1. Kerberos 事前認証を有効化 (AS-REP をブロック)
+2. サービスアカウントパスワードをローテーション、複雑性を強制
+3. 制約なし委任を無効化、制約付き委任を使用
+...
+```
+
+#### 6. インタラクティブ AI チャット
+
+Findings をインタラクティブに探索:
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --chat
+```
+
+その後、Claude に質問:
+```
+> 最も重大なリスクは何ですか？
+> Kerberoasting 攻撃について詳しく説明してください
+> ドメイン管理者への最速パスは何ですか？
+> EDR はこれらの技法をどのように検出しますか？
+```
+
+#### 7. Markdown レポート (人間向け)
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --format markdown --output findings.md
+```
+
+以下を含む構造化 Markdown を出力:
+- エグゼクティブサマリー
+- 重大度でグループ化された findings
+- MITRE ATT&CK 相互参照
+- 各 finding に対する復旧手順
+- ネットワーク遅延 / OPSEC ノート
+
+#### 8. MCP サーバーモード (LLM 統合)
+
+Claude Desktop またはカスタム LLM エージェント向けの MCP サーバーとして実行:
+
+```bash
+diego --mcp
+```
+
+Claude で以下のツールを使用:
+- `enumerate_asrep_candidates` — 事前認証無効アカウントをリスト
+- `run_asrep_roasting` — AS-REP Roasting を実行
+- `run_kerberoasting` — Kerberoasting を実行
+- `check_password_policy` — ドメインパスワードポリシーを取得
+- `enumerate_privileged_groups` — DA/EA メンバーをリスト
+
+#### 9. カスタムタイムアウト & Jitter
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --timeout 20 \
+  --modules ldap
+```
+
+タイムアウトは個別 LDAP クエリに適用。内部 jitter (100–500ms) はリクエスト間に追加。
+
+#### 10. 環境変数でパスワードを指定
+
+```bash
+export DIEGO_PASSWORD="MyP@ssw0rd"
+export DIEGO_USERNAME="jdoe"
+
+diego --dc 10.0.0.1 --domain corp.local
+```
+
+(コマンドラインでの認証情報を避ける — OPSEC 対応)
+
+---
+
 ## 診断モジュール
 
 ### Kerberos — `Asn1Kerberos`
