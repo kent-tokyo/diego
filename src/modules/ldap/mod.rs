@@ -1,5 +1,7 @@
+pub mod filters;
 pub mod parser;
 pub mod queries;
+pub mod severity;
 
 use std::sync::Arc;
 use std::time::Duration;
