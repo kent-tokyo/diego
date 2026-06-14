@@ -70,3 +70,26 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all -- -D warnings
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-tarpaulin
+      - run: cargo tarpaulin --out Xml --timeout 300
+      - uses: codecov/codecov-action@v4
+        with:
+          files: ./cobertura.xml
+          fail_ci_if_error: false
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

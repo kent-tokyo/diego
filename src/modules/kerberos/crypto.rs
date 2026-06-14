@@ -278,4 +278,52 @@ mod tests {
         let ct = rc4_hmac_encrypt(&ntlm_hash("correct"), 1, b"secret");
         assert!(rc4_hmac_decrypt(&ntlm_hash("wrong"), 1, &ct).is_err());
     }
+
+    // ─── RC4-HMAC bounds checks (Phase 1 security fix) ───────────────────────
+    #[test]
+    fn test_rc4_ciphertext_too_short() {
+        let key = ntlm_hash("password");
+        // Minimum valid ciphertext: 16-byte checksum + 8-byte confounder = 24 bytes
+        assert!(rc4_hmac_decrypt(&key, 1, &[0u8; 23]).is_err(), "23 bytes should fail");
+        assert!(rc4_hmac_decrypt(&key, 1, &[0u8; 1]).is_err(), "1 byte should fail");
+        assert!(rc4_hmac_decrypt(&key, 1, &[]).is_err(), "empty should fail");
+    }
+
+    #[test]
+    fn test_rc4_ciphertext_exactly_minimum() {
+        // 24 bytes: 16-byte checksum + 8-byte encrypted payload (confounder)
+        // Will fail checksum but shouldn't panic
+        let key = ntlm_hash("password");
+        let ct = vec![0u8; 24];
+        let result = rc4_hmac_decrypt(&key, 1, &ct);
+        assert!(result.is_err(), "24-byte ciphertext with wrong checksum should fail gracefully");
+    }
+
+    #[test]
+    fn test_rc4_empty_key_no_panic() {
+        // RC4 with empty key should not panic (regression test for modulo-by-zero)
+        let mut data = vec![1, 2, 3, 4, 5];
+        rc4_inplace(&[], &mut data);
+        // Empty key → no-op, data unchanged
+        assert_eq!(data, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_rc4_hmac_checksum_failure() {
+        let key = ntlm_hash("password");
+        let pt = b"test data";
+        let mut ct = rc4_hmac_encrypt(&key, 1, pt);
+        // Corrupt the checksum (first 16 bytes)
+        ct[0] ^= 0xFF;
+        assert!(rc4_hmac_decrypt(&key, 1, &ct).is_err(), "corrupted checksum should fail");
+    }
+
+    #[test]
+    fn test_rc4_hmac_decrypt_invalid_key_usage() {
+        let key = ntlm_hash("password");
+        let pt = b"test data";
+        let ct = rc4_hmac_encrypt(&key, 1, pt);
+        // Decrypt with wrong key usage value
+        assert!(rc4_hmac_decrypt(&key, 2, &ct).is_err(), "wrong key usage should fail");
+    }
 }
