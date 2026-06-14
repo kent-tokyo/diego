@@ -1,6 +1,6 @@
 [package]
 name = "diego"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "Pure Rust Active Directory security diagnostic agent. AS-REP Roasting, Kerberoasting, LDAP enumeration, OPSEC-friendly with Claude API analysis and MCP server mode."
 license = "MIT"
