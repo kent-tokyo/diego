@@ -133,3 +133,105 @@ async fn test_preauth_required_response() {
         other => panic!("Expected PreauthRequired, got {:?}", other),
     }
 }
+
+// ─── Phase 1 Security Fix Verification ────────────────────────────────────
+
+#[tokio::test]
+async fn test_malformed_asrep_too_short_cipher() {
+    // Send AS-REP with cipher < 24 bytes (violates RC4-HMAC bounds check).
+    // This should be parsed, but decryption should fail safely.
+    let too_short_cipher = b"shortcipher".to_vec(); // Only 11 bytes
+    let response = build_fake_asrep(ETYPE_RC4_HMAC, &too_short_cipher);
+
+    let addr = spawn_mock_kdc(response).await;
+    let req = build_asrep_roast_request("alice", "CORP.LOCAL", 0x1234abcd);
+    let raw = mod_send_kerberos_tcp(&addr, &req, 5)
+        .await
+        .expect("TCP send/recv failed");
+
+    // Parsing should succeed (we're just extracting the ciphertext)
+    let result = parse_kdc_response(&raw).expect("parse failed");
+    match result {
+        KdcResponse::AsRep(enc) => {
+            // The cipher is too short for RC4-HMAC decryption
+            assert_eq!(enc.cipher.len(), 11, "cipher should be 11 bytes");
+            assert!(enc.cipher.len() < 24, "cipher is too short for RC4-HMAC");
+        }
+        other => panic!("Expected AsRep, got {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn test_malformed_asrep_missing_enc_part() {
+    // Send AS-REP without [6] enc_part field — parser should fail gracefully.
+    let kdc_rep_inner: Vec<u8> = [
+        context_explicit(0, der_int(5)),     // [0] pvno
+        context_explicit(1, der_int(11)),    // [1] msg-type = AS-REP
+        context_explicit(3, {
+            let mut v = vec![0x1b]; // GeneralString tag
+            v.push(8u8);
+            v.extend_from_slice(b"CORP.LOC");
+            v
+        }),
+        // Missing [6] enc_part!
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
+    let kdc_rep = sequence(kdc_rep_inner);
+    let as_rep = application_explicit(11, kdc_rep);
+    let mut response = Vec::with_capacity(4 + as_rep.len());
+    response.extend_from_slice(&(as_rep.len() as u32).to_be_bytes());
+    response.extend_from_slice(&as_rep);
+
+    let addr = spawn_mock_kdc(response).await;
+    let req = build_asrep_roast_request("alice", "CORP.LOCAL", 0x1234abcd);
+    let raw = mod_send_kerberos_tcp(&addr, &req, 5)
+        .await
+        .expect("TCP send/recv failed");
+
+    // Parsing should fail — enc_part [6] is missing
+    let result = parse_kdc_response(&raw);
+    assert!(result.is_err(), "parsing AS-REP without enc_part should fail");
+}
+
+#[tokio::test]
+async fn test_invalid_response_tag() {
+    // Send a response with invalid APPLICATION tag (not 0x6b or 0x7e).
+    let mut response = vec![0x99]; // Invalid tag
+    response.extend_from_slice(&[0x01, 0x00]); // Minimal length/value
+
+    let mut framed = Vec::with_capacity(4 + response.len());
+    framed.extend_from_slice(&(response.len() as u32).to_be_bytes());
+    framed.extend_from_slice(&response);
+
+    let addr = spawn_mock_kdc(framed).await;
+    let req = build_asrep_roast_request("alice", "CORP.LOCAL", 0x1234abcd);
+    let raw = mod_send_kerberos_tcp(&addr, &req, 5)
+        .await
+        .expect("TCP send/recv failed");
+
+    // Parsing should fail — invalid APPLICATION tag
+    let result = parse_kdc_response(&raw);
+    assert!(result.is_err(), "parsing invalid tag should fail");
+}
+
+#[tokio::test]
+async fn test_truncated_kdc_response() {
+    // Send a truncated response: APPLICATION tag but no length/value.
+    let response = vec![0x6b]; // AS-REP tag but incomplete
+    let mut framed = Vec::with_capacity(4 + response.len());
+    framed.extend_from_slice(&(response.len() as u32).to_be_bytes());
+    framed.extend_from_slice(&response);
+
+    let addr = spawn_mock_kdc(framed).await;
+    let req = build_asrep_roast_request("alice", "CORP.LOCAL", 0x1234abcd);
+    let raw = mod_send_kerberos_tcp(&addr, &req, 5)
+        .await
+        .expect("TCP send/recv failed");
+
+    // Parsing should fail — truncated TLV structure
+    let result = parse_kdc_response(&raw);
+    assert!(result.is_err(), "parsing truncated response should fail");
+}
