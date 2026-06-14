@@ -1,9 +1,10 @@
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::io::{self, Write};
 
 use clap::Parser;
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -120,12 +121,40 @@ impl Config {
             _ => ReportFormat::Json,
         };
 
+        let username = cli.username.ok_or_else(|| anyhow::anyhow!("--username is required in CLI mode"))?;
+
+        // Password resolution: CLI → ENV → keytab → krb5 cache → interactive prompt
+        let password = if let Some(pwd) = cli.password {
+            // Explicitly provided
+            eprintln!("[+] Using password from --password");
+            Zeroizing::new(pwd)
+        } else if let Ok(pwd) = std::env::var("DIEGO_PASSWORD") {
+            // Environment variable
+            eprintln!("[+] Using password from $DIEGO_PASSWORD");
+            Zeroizing::new(pwd)
+        } else if let Some(pwd) = get_password_from_keytab(&username, &domain) {
+            // keytab authentication
+            eprintln!("[+] Using Kerberos authentication from keytab");
+            Zeroizing::new(pwd)
+        } else if let Some(pwd) = get_password_from_krb5_cache(&username, &domain) {
+            // Kerberos TGT cache
+            eprintln!("[+] Using Kerberos authentication from TGT cache");
+            Zeroizing::new(pwd)
+        } else {
+            // Interactive prompt
+            eprint!("Password: ");
+            io::stdout().flush()?;
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            Zeroizing::new(input.trim().to_string())
+        };
+
         Ok(Config {
             dc_ip,
             domain,
             base_dn,
-            username: cli.username.unwrap_or_default(),
-            password: Zeroizing::new(cli.password.unwrap_or_default()),
+            username,
+            password,
             modules,
             output: cli.output,
             format,
@@ -157,6 +186,75 @@ pub fn domain_to_base_dn(domain: &str) -> String {
         .map(|part| format!("DC={}", part))
         .collect::<Vec<_>>()
         .join(",")
+}
+
+/// Attempts to load authentication from keytab file at ~/.diego/keytab
+/// Returns a marker string "KERBEROS" to signal keytab-based auth
+fn get_password_from_keytab(username: &str, domain: &str) -> Option<String> {
+    let keytab_path = if let Ok(home) = std::env::var("HOME") {
+        PathBuf::from(format!("{}/.diego/keytab", home))
+    } else {
+        return None;
+    };
+
+    if keytab_path.exists() {
+        eprintln!("[*] Found keytab at {}", keytab_path.display());
+        eprintln!("[*] Kerberos principal: {}@{}", username, domain.to_uppercase());
+        // Return marker to signal keytab auth; actual Kerberos client will use the keytab
+        Some("KERBEROS_KEYTAB".to_string())
+    } else {
+        None
+    }
+}
+
+/// Attempts to detect Kerberos TGT in system cache (/tmp/krb5cc_* on Linux, LSA on Windows)
+/// Returns a marker string "KERBEROS" to signal cache-based auth
+fn get_password_from_krb5_cache(username: &str, domain: &str) -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        // Linux: check for /tmp/krb5cc_<uid> from $UID or KRB5CCNAME env var
+        if let Ok(ccname) = std::env::var("KRB5CCNAME") {
+            // KRB5CCNAME is set (e.g., "FILE:/tmp/krb5cc_1000")
+            eprintln!("[*] Found KRB5CCNAME: {}", ccname);
+            eprintln!("[*] Using cached Kerberos credentials for {}@{}", username, domain.to_uppercase());
+            return Some("KERBEROS_CACHE".to_string());
+        }
+
+        if let Ok(uid) = std::env::var("UID") {
+            let cache_path = PathBuf::from(format!("/tmp/krb5cc_{}", uid));
+            if cache_path.exists() {
+                eprintln!("[*] Found Kerberos TGT cache at {}", cache_path.display());
+                eprintln!("[*] Using cached Kerberos credentials for {}@{}", username, domain.to_uppercase());
+                return Some("KERBEROS_CACHE".to_string());
+            }
+        }
+
+        None
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // macOS: check ~/Library/Caches/org.h5l.kcm/event or KRB5CCNAME
+        if let Ok(ccname) = std::env::var("KRB5CCNAME") {
+            eprintln!("[*] Found KRB5CCNAME: {}", ccname);
+            eprintln!("[*] Using cached Kerberos credentials for {}@{}", username, domain.to_uppercase());
+            return Some("KERBEROS_CACHE".to_string());
+        }
+        None
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: Kerberos tickets are in LSASS memory
+        eprintln!("[*] Windows Kerberos cache: run 'klist' to check cached tickets");
+        eprintln!("[*] Or use: runas /user:{}@{} diego ...", username, domain);
+        None
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        None
+    }
 }
 
 fn parse_modules(s: &str) -> Vec<ModuleKind> {

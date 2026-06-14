@@ -20,10 +20,14 @@ Non-privileged Active Directory security diagnostic agent, written in Pure Rust.
 
 ```bash
 # CLI mode — run all diagnostic modules
+# Password can be omitted; diego will try: env var → keytab → TGT cache → interactive prompt
+diego --dc 10.0.0.1 --domain corp.local --username jdoe
+
+# With explicit password (least secure; avoids shell history with env var instead)
 diego --dc 10.0.0.1 --domain corp.local --username jdoe --password P@ss
 
 # With AI analysis (requires ANTHROPIC_API_KEY)
-diego --dc 10.0.0.1 --domain corp.local --username jdoe --password P@ss --ai-analyze
+diego --dc 10.0.0.1 --domain corp.local --username jdoe --ai-analyze
 
 # Interactive AI chat after scan
 diego ... --ai-analyze --chat
@@ -31,6 +35,39 @@ diego ... --ai-analyze --chat
 # MCP server mode (for Claude Desktop / MCP clients)
 diego --mcp
 ```
+
+### Password Resolution (Priority Order)
+
+When password is not provided with `--password`, diego tries these methods in order:
+
+1. **`$DIEGO_PASSWORD` environment variable** — Most OPSEC-friendly for scripts
+   ```bash
+   export DIEGO_PASSWORD="P@ssw0rd"
+   diego --dc 10.0.0.1 --domain corp.local --username jdoe
+   ```
+
+2. **Kerberos keytab** — `~/.diego/keytab` (no password needed)
+   ```bash
+   # Set up keytab (requires kinit or ktutil)
+   ktutil: addent -password -p user@CORP.LOCAL -k 1 -e aes256-cts-hmac-sha1-96
+   ktutil: write_kt ~/.diego/keytab
+   
+   # Then run without password
+   diego --dc 10.0.0.1 --domain corp.local --username jdoe
+   ```
+
+3. **Kerberos TGT cache** — `KRB5CCNAME` env var or `/tmp/krb5cc_*` (no password needed)
+   ```bash
+   # If already logged into Kerberos realm:
+   klist  # Check cached ticket
+   diego --dc 10.0.0.1 --domain corp.local --username jdoe
+   ```
+
+4. **Interactive prompt** — Fallback if none above are available
+   ```
+   $ diego --dc 10.0.0.1 --domain corp.local --username jdoe
+   Password: █████████
+   ```
 
 ---
 

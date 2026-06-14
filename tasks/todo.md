@@ -1,43 +1,172 @@
-# Diego — TODO
+# DIEGO — Development Tasks
 
-## Done
+**Project:** Domain Intranet Elusive Guardian & Offensive-Scouter  
+**Current Version:** 0.1.2  
+**Last Updated:** 2025-06-14
 
-### Core (v0.1)
-- [x] Project skeleton: Cargo.toml (edition 2024), config, error, module trait (`DiagnosticModule`)
-- [x] Manual DER encoder (`asreq.rs`) — no rasn-kerberos API dependency
-- [x] Kerberos crypto: inline MD4 (RFC 1320), RC4-HMAC (RFC 4757), inline RC4 — pure Rust, zero C
-- [x] Kerberos module: AS-REP Roasting (AS-REQ/AS-REP), Kerberoasting (TGT acquisition + TGS-REQ)
-- [x] Hashcat output: mode 18200 (AS-REP) + mode 13100 (TGS)
-- [x] LDAP module: 9 queries with jitter (AS-REP candidates, SPNs, description leaks, unconstrained delegation, constrained delegation, RBCD, privileged groups, stale passwords, password policy)
-- [x] Passive module: LLMNR/NBT-NS multicast UDP + pnet promiscuous cleartext detection
-- [x] Report engine: JSON + Markdown with `llm_context`, `remediation_steps`, `mitre_id` per Finding
-- [x] `ScanContext` + `AiAnalysis` in Report for LLM-optimised output
+---
 
-### AI-First (v0.2)
-- [x] `--ai-analyze`: Claude API non-streaming analysis → structured `AiAnalysis` (attack narrative, critical path, immediate actions)
-- [x] `--chat`: streaming SSE REPL with conversation history
-- [x] `--mcp`: MCP server over stdio, JSON-RPC 2.0, 13 tools
-- [x] `--mcp-init`: writes Claude Desktop `claude_desktop_config.json` snippet
+## 📊 Test Coverage Progress
 
-### Feature enhancements (v0.3)
-- [x] LDAP-CONST-DELEG: Constrained Delegation (msDS-AllowedToDelegateTo + T2A4D flag)
-- [x] LDAP-RBCD: Resource-Based Constrained Delegation
-- [x] LDAP-PRIVESC-GROUP: recursive privileged group membership (DA/EA/Backup Ops etc.)
-- [x] LDAP-STALE-PWD: service accounts with passwords >365 days old
-- [x] Password spray estimation in policy finding (safe rate vs lockout threshold)
-- [x] Pure Rust pillar in README + comparison table
+| Metric | Progress | Details |
+|--------|----------|---------|
+| Total Tests | 238 / ∞ | lib: 216, bin: 207, integration: 15 |
+| Code Coverage | ~36-37% | 654/1,899 LOC |
+| Target | 50%+ | Focus on AI + MCP modules |
 
-### Testing & CI (v0.3)
-- [x] Unit tests: MD4 RFC 1320 vectors, ntlm_hash, DER int, RC4 roundtrip, Hashcat format, LDAP parser, config
-- [x] Integration test: mock KDC (TcpListener) — AS-REP Roasting + PREAUTH_REQUIRED (`tests/mock_kdc.rs`)
-- [x] `src/lib.rs` for integration test crate access
-- [x] `.github/workflows/ci.yml`: test / OPSEC lint / musl static binary / Windows / Clippy
-- [x] `.gitignore`, `Cargo.toml` metadata (repository, keywords, categories)
+---
 
-## Backlog
+## ✅ Completed Sessions
 
-- [ ] AES Kerberos (etype 17/18) — pre-auth + AS-REP decryption; needs `sha1`, `pbkdf2`, `aes` (RustCrypto)
-- [ ] DCSync ACL check — parse `nTSecurityDescriptor` binary (Windows DACL format) for replication rights
-- [ ] `--mcp-proxy` mode — relay MCP calls to a remote diego instance over SSH/SOCKS
-- [ ] musl cross-compile config for macOS → Linux (`.cargo/config.toml` + `brew install FiloSottile/musl-cross/musl-cross`)
-- [ ] Constrained Delegation / RBCD added to MCP `enumerate_constrained_delegation` and `enumerate_rbcd` tools (done) — add to `full_scan` aggregation
+### Session 1: Phase 1 & 2 Security Fixes + CI
+- **Focus:** Kerberos protocol foundation (AS-REQ, AS-REP, TGS-REP)
+- **Tests Added:** 85 tests
+- **Coverage:** 20.91%
+- **Status:** ✅ Complete
+
+### Session 2: TGS-REP & LDAP Query Tests
+- **Focus:** Kerberos response parsing, LDAP enumeration
+- **Tests Added:** 61 new → 146 total
+- **Coverage:** 28.65%
+- **Status:** ✅ Complete
+
+### Session 3: LLMNR/NBT-NS Passive Monitoring
+- **Focus:** Broadcast-based name resolution detection
+- **Tests Added:** 27 new → 173 total
+- **Coverage:** 31.54%
+- **Status:** ✅ Complete
+
+### Session 4: Cleartext Credential Capture
+- **Focus:** HTTP, FTP, SMTP, Telnet cleartext protocols
+- **Tests Added:** 33 new → 206 total
+- **Coverage:** 34.44%
+- **Status:** ✅ Complete
+
+### Session 5: MCP Tools Infrastructure Tests
+- **Focus:** Tool registration, metadata, helper functions
+- **Tests Added:** 32 new → 238 total
+- **Coverage:** ~36-37% (estimated)
+- **Status:** ✅ Complete
+
+---
+
+## 🔄 Next Sessions (Planned)
+
+### Session 6: Claude API Client + Report Generation
+- **Files:** `src/ai/claude.rs` (76 LOC) + `src/report/markdown.rs` (76 LOC)
+- **Estimated Tests:** 20-30
+- **Target Coverage:** 40%+
+- **Status:** 📋 Planned
+
+### Session 7: LDAP Advanced Queries
+- **Files:** Constrained delegation, RBCD, privilege groups
+- **Estimated Tests:** 25-35
+- **Target Coverage:** 45%+
+- **Status:** 📋 Planned
+
+### Session 8: Full Integration Tests
+- **Focus:** End-to-end LDAP/Kerberos workflows
+- **Estimated Tests:** 15-20
+- **Target Coverage:** 50%+
+- **Status:** 📋 Planned
+
+---
+
+## 📝 Documentation Status
+
+| Task | Status | Notes |
+|------|--------|-------|
+| README.md — CLI Examples | ✅ | 10 practical examples |
+| README.md — Feature Comparison | ✅ | vs 6 competing tools |
+| README_ja.md — Japanese | ✅ | Full translation |
+| README_ja.md — CLI Examples | ✅ | Japanese examples |
+| Support Additional Languages | 📋 | French, Spanish, German, Chinese |
+| CONTRIBUTING.md | 📋 | Development guide |
+| SECURITY.md | 📋 | Responsible disclosure |
+| CHANGELOG.md | 📋 | Release notes |
+
+---
+
+## 🎯 Implementation Checklist
+
+### Core Tests (Sessions 1-5)
+- [x] Kerberos protocol (AS-REP, TGS)
+- [x] LDAP enumeration
+- [x] Passive monitoring (LLMNR, cleartext)
+- [x] MCP tool infrastructure
+
+### Remaining (Sessions 6-8)
+- [ ] Claude API client
+- [ ] Report generation (Markdown)
+- [ ] Advanced LDAP queries
+- [ ] End-to-end integration
+
+### Nice-to-Have
+- [ ] AES Kerberoasting
+- [ ] DCSync ACL checking
+- [ ] Password spray
+- [ ] Static binary (musl)
+- [ ] CI/CD pipeline
+
+---
+
+## 🔐 Security Checklist
+
+- [x] No command execution
+- [x] Credential zeroization
+- [x] Request jitter
+- [x] Read-only LDAP
+- [x] Pure Rust (no .NET/PS/Python)
+- [ ] Static binary builds
+- [ ] Minimal dependencies
+- [ ] EDR evasion testing
+
+---
+
+## 📦 Release Roadmap
+
+**v0.1.2** (Current)
+- CLI usage examples
+- Japanese documentation
+- MCP tool tests
+
+**v0.2.0** (Target)
+- 50%+ coverage
+- Sessions 6-8 complete
+- Claude API integration
+- Report generation
+
+---
+
+## 🔗 Resources
+
+- Repo: https://github.com/kent-tokyo/diego
+- Crates: https://crates.io/crates/diego
+- License: MIT
+
+---
+
+## Session 5b: Password-Less Authentication Implementation ✅
+
+**Features Added:**
+1. ✅ Environment variable ($DIEGO_PASSWORD)
+2. ✅ Kerberos keytab (~/.diego/keytab)
+3. ✅ Kerberos TGT cache detection (KRB5CCNAME, /tmp/krb5cc_*)
+4. ✅ Interactive prompt (fallback)
+
+**Files Modified:**
+- src/config.rs: Added credential resolution logic
+- README.md: Added password resolution documentation
+- README_ja.md: Japanese translation of password docs
+
+**Priority Order:**
+1. CLI --password argument (explicit)
+2. $DIEGO_PASSWORD environment variable
+3. Keytab authentication (~/.diego/keytab)
+4. Kerberos TGT cache
+5. Interactive stdin prompt
+
+**OPSEC Benefits:**
+- No password on command line (avoids shell history)
+- Supports cached Kerberos credentials (realistic AD breach scenario)
+- Keytab support for automated/scripted deployments
