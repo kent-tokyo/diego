@@ -595,12 +595,13 @@ fn build_minimal_config(
     let ip = IpAddr::from_str(dc_ip)
         .map_err(|_| anyhow::anyhow!("Invalid DC IP: {}", dc_ip))?;
 
+    use zeroize::Zeroizing;
     Ok(Config {
         dc_ip: ip,
         domain: domain.to_string(),
         base_dn: domain.split('.').map(|p| format!("DC={}", p)).collect::<Vec<_>>().join(","),
         username: username.to_string(),
-        password: password.to_string(),
+        password: Zeroizing::new(password.to_string()),
         modules: vec![
             crate::config::ModuleKind::Ldap,
             crate::config::ModuleKind::Kerberos,

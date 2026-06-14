@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::Parser;
-use zeroize::ZeroizeOnDrop;
+use zeroize::{Zeroize, Zeroizing};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -85,13 +85,13 @@ pub enum ReportFormat {
     Markdown,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Config {
     pub dc_ip: IpAddr,
     pub domain: String,
     pub base_dn: String,
     pub username: String,
-    pub password: String,
+    pub password: Zeroizing<String>, // Credentials zeroized on drop
     pub modules: Vec<ModuleKind>,
     pub output: Option<PathBuf>,
     pub format: ReportFormat,
@@ -125,7 +125,7 @@ impl Config {
             domain,
             base_dn,
             username: cli.username.unwrap_or_default(),
-            password: cli.password.unwrap_or_default(),
+            password: Zeroizing::new(cli.password.unwrap_or_default()),
             modules,
             output: cli.output,
             format,
