@@ -7,6 +7,7 @@
 use futures_util::StreamExt;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroizing;
 
 use crate::report::{AiAnalysis, Report};
 
@@ -72,7 +73,7 @@ struct StreamEvent {
 // ─── Client ───────────────────────────────────────────────────────────────────
 
 pub struct ClaudeClient {
-    api_key: String,
+    api_key: Zeroizing<String>, // API key zeroized on drop
     pub model: String,
     client: reqwest::Client,
 }
@@ -96,7 +97,7 @@ impl ClaudeClient {
             .build()?;
 
         Ok(ClaudeClient {
-            api_key: key,
+            api_key: Zeroizing::new(key),
             model: model.unwrap_or_else(|| DEFAULT_MODEL.into()),
             client,
         })
