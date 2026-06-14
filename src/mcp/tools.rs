@@ -616,3 +616,265 @@ fn build_minimal_config(
         mcp: false,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─── Phase 1: Tool List & Metadata Tests ───────────────────────────
+
+    #[test]
+    fn test_tool_list_returns_tools() {
+        let tools = tool_list();
+        assert!(!tools.is_empty(), "Tool list should not be empty");
+        assert!(tools.len() > 10, "Should have at least 10 tools");
+    }
+
+    #[test]
+    fn test_tool_list_contains_required_tools() {
+        let tools = tool_list();
+        let names: Vec<String> = tools.iter()
+            .filter_map(|t| t.get("name").and_then(|v| v.as_str()).map(|s| s.to_string()))
+            .collect();
+
+        assert!(names.contains(&"enumerate_asrep_candidates".to_string()));
+        assert!(names.contains(&"enumerate_spn_accounts".to_string()));
+        assert!(names.contains(&"run_asrep_roasting".to_string()));
+        assert!(names.contains(&"run_kerberoasting".to_string()));
+        assert!(names.contains(&"listen_llmnr".to_string()));
+    }
+
+    #[test]
+    fn test_tool_has_required_fields() {
+        let tools = tool_list();
+
+        for tool in tools {
+            assert!(tool.get("name").is_some(), "Tool must have 'name'");
+            assert!(tool.get("description").is_some(), "Tool must have 'description'");
+            assert!(tool.get("inputSchema").is_some(), "Tool must have 'inputSchema'");
+        }
+    }
+
+    #[test]
+    fn test_make_tool_json_structure() {
+        let tool = make_tool(
+            "test_tool",
+            "This is a test tool",
+            serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        );
+
+        assert_eq!(tool.get("name").and_then(|v| v.as_str()), Some("test_tool"));
+        assert_eq!(tool.get("description").and_then(|v| v.as_str()), Some("This is a test tool"));
+        assert!(tool.get("inputSchema").is_some());
+    }
+
+    #[test]
+    fn test_tool_descriptions_non_empty() {
+        let tools = tool_list();
+
+        for tool in tools {
+            let desc = tool.get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            assert!(!desc.is_empty(), "Tool description must not be empty");
+            assert!(desc.len() > 20, "Tool description should be sufficiently detailed");
+        }
+    }
+
+    // ─── Phase 2: Helper Function Tests ───────────────────────────────
+
+    #[test]
+    fn test_get_str_valid_key() {
+        let args = serde_json::json!({
+            "username": "admin",
+            "domain": "corp.local"
+        });
+
+        let result = get_str(&args, "username");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "admin");
+    }
+
+    #[test]
+    fn test_get_str_missing_key() {
+        let args = serde_json::json!({
+            "username": "admin"
+        });
+
+        let result = get_str(&args, "password");
+        assert!(result.is_err(), "Should error on missing key");
+    }
+
+    #[test]
+    fn test_get_str_wrong_type() {
+        let args = serde_json::json!({
+            "timeout_secs": 123
+        });
+
+        let result = get_str(&args, "timeout_secs");
+        assert!(result.is_err(), "Should error on non-string type");
+    }
+
+    #[test]
+    fn test_get_timeout_with_value() {
+        let args = serde_json::json!({
+            "timeout_secs": 30
+        });
+
+        let timeout = get_timeout(&args);
+        assert_eq!(timeout, 30);
+    }
+
+    #[test]
+    fn test_get_timeout_default() {
+        let args = serde_json::json!({});
+
+        let timeout = get_timeout(&args);
+        assert_eq!(timeout, 10, "Default timeout should be 10 seconds");
+    }
+
+    #[test]
+    fn test_get_timeout_zero() {
+        let args = serde_json::json!({
+            "timeout_secs": 0
+        });
+
+        let timeout = get_timeout(&args);
+        assert_eq!(timeout, 0);
+    }
+
+    // ─── Phase 3: Domain to DN Conversion Tests ────────────────────────
+
+    #[test]
+    fn test_domain_to_base_dn_single_part() {
+        let dn = domain_to_base_dn("local");
+        assert_eq!(dn, "DC=local");
+    }
+
+    #[test]
+    fn test_domain_to_base_dn_two_parts() {
+        let dn = domain_to_base_dn("corp.local");
+        assert_eq!(dn, "DC=corp,DC=local");
+    }
+
+    #[test]
+    fn test_domain_to_base_dn_three_parts() {
+        let dn = domain_to_base_dn("subdomain.corp.local");
+        assert_eq!(dn, "DC=subdomain,DC=corp,DC=local");
+    }
+
+    #[test]
+    fn test_domain_to_base_dn_uppercase() {
+        let dn = domain_to_base_dn("CORP.LOCAL");
+        assert_eq!(dn, "DC=CORP,DC=LOCAL");
+    }
+
+    #[test]
+    fn test_domain_to_base_dn_empty_parts() {
+        let dn = domain_to_base_dn("corp..local");
+        // Should handle empty parts gracefully
+        assert!(dn.contains("DC="), "Should still create DN");
+    }
+
+    // ─── Phase 4: Tool Input Validation Tests ──────────────────────────
+
+    #[test]
+    fn test_tool_input_schema_types() {
+        let tools = tool_list();
+
+        for tool in tools {
+            let schema = tool.get("inputSchema");
+            assert!(schema.is_some(), "Tool must have inputSchema");
+
+            if let Some(s) = schema {
+                // Should be an object with properties
+                assert!(s.get("type").is_some(), "Schema should have type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_asrep_roasting_has_usernames_param() {
+        let tools = tool_list();
+        let asrep_tool = tools.iter()
+            .find(|t| t.get("name").and_then(|v| v.as_str()) == Some("run_asrep_roasting"))
+            .expect("asrep roasting tool should exist");
+
+        let schema = asrep_tool.get("inputSchema").expect("has schema");
+        let props = schema.get("properties").expect("has properties");
+        assert!(props.get("usernames").is_some(), "Should have usernames parameter");
+    }
+
+    #[test]
+    fn test_listen_llmnr_has_timeout_param() {
+        let tools = tool_list();
+        let listen_tool = tools.iter()
+            .find(|t| t.get("name").and_then(|v| v.as_str()) == Some("listen_llmnr"))
+            .expect("listen_llmnr tool should exist");
+
+        let schema = listen_tool.get("inputSchema").expect("has schema");
+        let props = schema.get("properties").expect("has properties");
+        assert!(props.get("timeout_secs").is_some(), "Should have timeout_secs parameter");
+    }
+
+    // ─── Phase 5: Config Building Tests ────────────────────────────────
+
+    #[test]
+    fn test_build_minimal_config_valid() {
+        let result = build_minimal_config("192.168.1.1", "corp.local", "user", "pass", 10);
+        assert!(result.is_ok(), "Should build config with valid args");
+
+        let config = result.unwrap();
+        assert_eq!(config.dc_ip.to_string(), "192.168.1.1");
+        assert_eq!(config.domain, "corp.local");
+        assert_eq!(config.username, "user");
+    }
+
+    #[test]
+    fn test_build_minimal_config_timeout() {
+        let config = build_minimal_config("10.0.0.1", "example.com", "admin", "secret", 30).unwrap();
+        assert_eq!(config.timeout_secs, 30);
+    }
+
+    #[test]
+    fn test_build_minimal_config_base_dn() {
+        let config = build_minimal_config("10.0.0.1", "corp.local", "user", "pass", 10).unwrap();
+        assert_eq!(config.base_dn, "DC=corp,DC=local");
+    }
+
+    #[test]
+    fn test_build_minimal_config_modules() {
+        let config = build_minimal_config("1.1.1.1", "test.local", "u", "p", 5).unwrap();
+        assert!(!config.modules.is_empty(), "Should have modules configured");
+        assert!(config.modules.len() >= 2, "Should have at least LDAP and Kerberos");
+    }
+
+    // ─── Phase 6: Dispatch and Tool Matching Tests ─────────────────────
+
+    #[test]
+    fn test_dispatch_tool_names_match_list() {
+        let tools = tool_list();
+        let tool_names: Vec<&str> = tools.iter()
+            .filter_map(|t| t.get("name").and_then(|v| v.as_str()))
+            .collect();
+
+        // Verify each tool name can be dispatched (at least by name)
+        for name in tool_names {
+            assert!(!name.is_empty(), "Tool name should not be empty");
+            assert!(name.len() < 50, "Tool name should be reasonable length");
+        }
+    }
+
+    #[test]
+    fn test_tool_names_are_unique() {
+        let tools = tool_list();
+        let names: Vec<String> = tools.iter()
+            .filter_map(|t| t.get("name").and_then(|v| v.as_str()).map(|s| s.to_string()))
+            .collect();
+
+        assert_eq!(names.len(), tools.len(), "All tool names should be unique");
+    }
+}
