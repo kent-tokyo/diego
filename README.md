@@ -6,12 +6,39 @@ Non-privileged Active Directory security diagnostic agent, written in Pure Rust.
 
 **DIEGO** is a post-exploitation reconnaissance and security diagnostic agent for Active Directory environments. It operates entirely with standard domain user credentials, produces no noisy network artefacts, and ships as a single static binary.
 
+### Sample HTML Report
+
+[![diego HTML report](docs/assets/sample-report.png)](docs/sample-report.html)
+
+A single self-contained HTML file (no CDN, works air-gapped) with a severity summary, attack-path overview, a sortable/filterable findings table with **Severity × Confidence**, baseline diff, and an audit-style appendix. **[▶ Live demo](https://kent-tokyo.github.io/diego/sample-report.html)** · [sample JSON](docs/sample-findings.json)
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph DC["Active Directory"]
+        LDAP["LDAP :389<br/>(read-only)"]
+        KRB["Kerberos :88"]
+        NET["Broadcast traffic<br/>(LLMNR / NBT-NS)"]
+    end
+    LDAP --> COL
+    KRB --> COL
+    NET --> COL
+    COL["Collector<br/>ldap · kerberos · passive modules"] --> AN
+    AN["Analyzer<br/>severity + confidence<br/>(optional Claude AI narrative)"] --> FIND
+    FIND["Findings<br/>(Report)"] --> OUT["Output<br/>HTML · JSON · Markdown · MCP"]
+```
+
+Standard-user credentials in, prioritised findings out — no writes, no OS command execution.
+
+---
+
 ## Key Pillars
 
 - **Unprivileged** — Works with standard domain user credentials only. No administrator rights required at any stage.
 - **Stealth (OPSEC-friendly)** — Issues only legitimate AD queries. No aggressive scanning. Configurable jitter between requests blends with normal domain traffic.
 - **Portable** — Single static binary with zero runtime dependencies. Drop and run on any target host.
-- **Pure Rust** — No .NET CLR, no PowerShell, no Python interpreter. Every protocol interaction — Kerberos ASN.1 framing, LDAP, RC4-HMAC — is implemented in pure Rust (RustCrypto). This eliminates the ETW / AMSI / Script Block Logging attack surface that EDR products monitor most aggressively.
+- **Pure Rust** — No .NET CLR, no PowerShell, no Python interpreter. Every protocol interaction — Kerberos ASN.1 framing, LDAP, RC4-HMAC — is implemented in pure Rust (RustCrypto). This avoids the *host-based* ETW / AMSI / Script Block Logging telemetry that EDR products lean on most heavily for .NET/PowerShell tooling. See [Detection considerations](#detection-considerations) for what this does **not** evade.
 - **AI-First** — Claude API integration synthesises scan output into a coherent attack narrative. MCP server mode allows LLM clients to orchestrate individual diagnostic tools directly.
 
 ---
@@ -94,7 +121,8 @@ diego [OPTIONS]
 |--------|---------|-------------|
 | `--modules <MODULES>` | `all` | Specific modules: `kerberos`, `ldap`, `passive`, or `all` |
 | `--output <OUTPUT>` | `stdout` | Output file path |
-| `--format <FORMAT>` | `json` | Output format: `json` or `markdown` |
+| `--format <FORMAT>` | `json` | Output format: `json`, `markdown`, or `html` |
+| `--baseline <PATH>` | — | Prior diego JSON report to diff against (shows new / resolved / severity-changed findings) |
 | `--timeout <TIMEOUT>` | `10` | Per-query timeout in seconds |
 | `--interface <INTERFACE>` | Auto-detect | Network interface for passive listening |
 | `--ai-model <AI_MODEL>` | `claude-sonnet-4-6` | Claude model for analysis |
@@ -275,6 +303,28 @@ Outputs structured markdown with:
 - Remediation steps for each finding
 - Network jitter / OPSEC notes
 
+#### 7b. HTML Report (Single Self-Contained File)
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local \
+  --username jdoe --password 'P@ssw0rd' \
+  --format html --output report.html
+```
+
+Produces one self-contained `report.html` (inline CSS/JS, no CDN — works air-gapped) with severity summary cards, an attack-path overview, and a sortable/filterable findings table. All AD-sourced strings are HTML-escaped, so attacker-controlled values (e.g. description fields) render inert.
+
+#### 7c. Baseline Diff (Track Drift Between Scans)
+
+```bash
+# First scan → save JSON baseline
+diego ... --format json --output baseline.json
+
+# Later scan → diff against the baseline
+diego ... --format html --baseline baseline.json --output report.html
+```
+
+The report gains a **Baseline Diff** section: 🆕 new, ✅ resolved, and ⚠️ severity-changed findings, plus an unchanged count. Works with `json`, `markdown`, and `html` output.
+
 #### 8. MCP Server Mode (LLM Integration)
 
 Run as an MCP server for Claude Desktop or custom LLM agents:
@@ -380,7 +430,8 @@ When started with `diego --mcp`, the binary exposes a Model Context Protocol ser
 | Language / runtime | Rust — single static binary | C# (.NET) + Python | Python 3 | PowerShell | C# (.NET) | C# (.NET) |
 | **Pure Rust / no C runtime** | **Yes** | No (.NET CLR) | No (CPython) | No (PS runtime) | No (.NET CLR) | No (.NET CLR) |
 | Privilege required | **Standard user only** | Local admin on endpoints | Domain user (some ops need admin) | Domain user | Domain user | Domain admin recommended |
-| Detectable by EDR | **Low** — no .NET/PS/Python | High — .NET reflection, AMSI | Medium | High — AMSI / Script Block Logging | High — .NET, known signatures | Medium |
+| Host-based runtime telemetry (ETW/AMSI/SBL) | **Avoided** — no .NET/PS/Python | High — .NET reflection, AMSI | Medium | High — AMSI / Script Block Logging | High — .NET, known signatures | Medium |
+| DC-side behavioural detection (e.g. MDI) | **Still applies** †| Applies | Applies | Applies | Applies | Applies |
 | Active scanning / noise | **No** — read-only LDAP + Kerberos only | Yes — SMB, RPC, massive LDAP dump | Moderate | Moderate | Yes | Yes — extensive LDAP/RPC |
 | Jitter / OPSEC throttling | **Yes** | No | No | No | No | No |
 | AS-REP Roasting | **Yes** | No (data only) | Yes (`GetNPUsers.py`) | No | **Yes** | No |
@@ -403,7 +454,26 @@ When started with `diego --mcp`, the binary exposes a Model Context Protocol ser
 - **Rubeus** is the most capable Kerberos attack tool but is .NET-only, Windows-only, and heavily signatured by EDR.
 - **PowerView** is powerful for LDAP enumeration but PowerShell is the most scrutinised execution environment in modern SOCs.
 - **PingCastle** is the closest to diego in intent (domain health check) but requires elevated privileges, produces only HTML, and has no stealth posture.
-- **diego** occupies the gap: a single binary that runs from a standard user session on Linux or Windows, avoids EDR-triggering runtimes, and feeds findings directly into an AI for narrative synthesis.
+- **diego** occupies the gap: a single binary that runs from a standard user session on Linux or Windows, avoids host-based EDR runtimes, and feeds findings directly into an AI for narrative synthesis.
+
+> † **Honest caveat.** Avoiding .NET/PowerShell/Python removes *host-based* runtime telemetry, but it does **not** make the underlying behaviour invisible. See [Detection considerations](#detection-considerations).
+
+---
+
+## Detection considerations
+
+diego is **OPSEC-friendly, not invisible**. We separate two things that are often conflated:
+
+1. **Host-based detection of the tool.** Because diego is a single pure-Rust binary, it generates no .NET CLR / PowerShell / Python runtime artefacts — so the ETW, AMSI, and Script Block Logging signals that catch Rubeus/PowerView/Impacket on the foothold host do not fire. This is a genuine, measurable advantage.
+
+2. **DC-side detection of the behaviour.** The *actions* diego performs — LDAP enumeration, Kerberoasting (TGS requests, especially RC4), AS-REP roasting — are exactly what directory-side sensors such as **Microsoft Defender for Identity (MDI)** are built to detect, **regardless of the client language**. In particular, **RC4 (`etype 23`) Kerberoasting is a loud, well-signatured event** in modern environments.
+
+What jitter/throttling does and does not do:
+
+- ✅ Smooths *timing and volume* so requests blend with normal traffic.
+- ❌ Does **not** alter the *behavioural signature* of an individual request (e.g. an RC4 TGS for an SPN account still looks like Kerberoasting).
+
+**Bottom line:** diego reduces host-based EDR exposure and request-burst anomalies. It is appropriate for authorised diagnostics and assumes a defender may still observe directory-side behaviour. Treat "low host telemetry" and "undetectable" as different claims — diego only makes the former.
 
 ---
 
@@ -423,9 +493,19 @@ The release profile applies LTO, single codegen unit, and binary stripping to mi
 ## OPSEC Notes
 
 - No OS command execution at any point — all operations are pure network protocol interactions.
-- Randomised jitter is applied between LDAP and Kerberos requests to avoid uniform timing signatures.
+- Randomised jitter is applied between LDAP and Kerberos requests to avoid uniform *timing* signatures (note: jitter does not change the *behavioural* signature of an individual request — see [Detection considerations](#detection-considerations)).
 - All queries are functionally identical to those issued by standard Windows domain workstations and domain management tools.
 - No writes to the directory; all operations are strictly read-only.
+- **Not a substitute for evasion.** diego lowers host-based EDR exposure; directory-side sensors (e.g. MDI) can still observe Kerberoasting/AS-REP behaviour. Use only where you are authorised to run AD diagnostics.
+
+---
+
+## Documentation
+
+- [Threat Model](docs/THREAT_MODEL.md) — goals, non-goals, detection assumptions, supported environments, limitations
+- [Benchmarks](docs/BENCHMARKS.md) — methodology (results pending lab validation)
+- [Changelog](CHANGELOG.md)
+- [Sample report (HTML)](docs/sample-report.html) · [sample JSON](docs/sample-findings.json) · [▶ live demo](https://kent-tokyo.github.io/diego/sample-report.html)
 
 ---
 

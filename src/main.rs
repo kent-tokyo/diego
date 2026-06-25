@@ -1,3 +1,10 @@
+// The binary re-declares the same modules the library crate exposes, so the
+// module source is compiled twice. Items that are part of the library's public
+// API but unused by this CLI binary would otherwise be flagged as dead code in
+// the binary context only. The library crate (lib.rs) keeps full dead_code
+// enforcement, which is where real unused-code regressions are caught.
+#![allow(dead_code)]
+
 mod ai;
 mod config;
 mod error;
@@ -139,6 +146,20 @@ async fn main() -> anyhow::Result<()> {
         report.summary.high,
         report.summary.medium,
     );
+
+    // ── Baseline diff ─────────────────────────────────────────────────────────
+    if let Some(path) = &config.baseline {
+        let data = std::fs::read_to_string(path)
+            .map_err(|e| anyhow::anyhow!("Failed to read baseline {}: {}", path.display(), e))?;
+        let baseline: Report = serde_json::from_str(&data)
+            .map_err(|e| anyhow::anyhow!("Failed to parse baseline JSON {}: {}", path.display(), e))?;
+        let d = report::diff::compute_diff(&report, &baseline);
+        eprintln!(
+            "[+] Baseline diff: {} new, {} resolved, {} severity-changed, {} unchanged",
+            d.new.len(), d.resolved.len(), d.severity_changed.len(), d.unchanged_count,
+        );
+        report = report.with_diff(d);
+    }
 
     // ── AI analysis ───────────────────────────────────────────────────────────
     if config.ai_analyze {

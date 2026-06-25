@@ -21,6 +21,8 @@ use super::tools;
 
 #[derive(Deserialize)]
 struct RpcRequest {
+    // Part of the JSON-RPC 2.0 envelope; deserialized for completeness.
+    #[allow(dead_code)]
     jsonrpc: String,
     id: Option<Value>,
     method: String,

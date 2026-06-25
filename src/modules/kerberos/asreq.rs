@@ -48,6 +48,7 @@ fn tlv(tag: u8, value: &[u8]) -> Vec<u8> {
     out
 }
 
+#[allow(dead_code)] // DER helper retained for future Kerberos message types
 fn tlv_multi(tag: u8, parts: &[Vec<u8>]) -> Vec<u8> {
     let value: Vec<u8> = parts.iter().flat_map(|p| p.iter().copied()).collect();
     tlv(tag, &value)
@@ -110,6 +111,7 @@ pub fn der_bit_string(bytes: &[u8], unused_bits: u8) -> Vec<u8> {
 }
 
 /// SEQUENCE OF Integer items
+#[allow(dead_code)] // DER helper retained for future Kerberos message types
 fn der_seq_of_int(items: &[i64]) -> Vec<u8> {
     let inner: Vec<u8> = items.iter().flat_map(|&n| der_int(n)).collect();
     sequence(inner)

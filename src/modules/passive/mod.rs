@@ -14,6 +14,12 @@ use self::llmnr::{capture_llmnr, capture_nbtns};
 
 pub struct PassiveModule;
 
+impl Default for PassiveModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PassiveModule {
     pub fn new() -> Self {
         PassiveModule
@@ -39,7 +45,7 @@ impl DiagnosticModule for PassiveModule {
 
         let all_name_caps: Vec<_> = llmnr_caps
             .into_iter()
-            .chain(nbtns_caps.into_iter())
+            .chain(nbtns_caps)
             .collect();
 
         if !all_name_caps.is_empty() {

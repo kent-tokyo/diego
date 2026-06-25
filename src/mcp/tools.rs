@@ -608,6 +608,7 @@ fn build_minimal_config(
         ],
         output: None,
         format: crate::config::ReportFormat::Json,
+        baseline: None,
         timeout_secs,
         interface: None,
         ai_analyze: false,

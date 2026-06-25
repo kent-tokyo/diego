@@ -1,6 +1,6 @@
 [package]
 name = "diego"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2024"
 description = "Pure Rust Active Directory security diagnostic agent. AS-REP Roasting, Kerberoasting, LDAP enumeration, OPSEC-friendly with Claude API analysis and MCP server mode."
 license = "MIT"
@@ -29,7 +29,10 @@ rasn = "0.20"
 rasn-kerberos = "0.20"
 
 # LDAP
-ldap3 = "0.11"
+# default-features off drops native-tls (→ openssl-sys on Linux/musl); tls-rustls
+# keeps a pure-Rust (ring) TLS backend. Only the async API is used, so "sync" is
+# not needed (tls-rustls already pulls tokio/rt).
+ldap3 = { version = "0.12", default-features = false, features = ["tls-rustls", "tls-rustls-aws-lc-rs"] }
 
 # Packet capture
 pnet = "0.34"
@@ -54,7 +57,7 @@ chrono = { version = "0.4", features = ["serde"] }
 hex = "0.4"
 
 # AI / MCP
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 futures-util = "0.3"
 tokio-stream = "0.1"
 

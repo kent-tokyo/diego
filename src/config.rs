@@ -36,9 +36,13 @@ pub struct Cli {
     #[arg(long)]
     pub output: Option<PathBuf>,
 
-    /// Output format: json or markdown
+    /// Output format: json, markdown, or html
     #[arg(long, default_value = "json")]
     pub format: String,
+
+    /// Path to a prior diego JSON report to diff against (baseline comparison)
+    #[arg(long)]
+    pub baseline: Option<PathBuf>,
 
     /// Per-query timeout in seconds
     #[arg(long, default_value = "10")]
@@ -84,6 +88,7 @@ pub enum ModuleKind {
 pub enum ReportFormat {
     Json,
     Markdown,
+    Html,
 }
 
 #[derive(Debug)]
@@ -96,6 +101,7 @@ pub struct Config {
     pub modules: Vec<ModuleKind>,
     pub output: Option<PathBuf>,
     pub format: ReportFormat,
+    pub baseline: Option<PathBuf>,
     pub timeout_secs: u64,
     pub interface: Option<String>,
     // AI
@@ -118,6 +124,7 @@ impl Config {
 
         let format = match cli.format.to_lowercase().as_str() {
             "markdown" | "md" => ReportFormat::Markdown,
+            "html" | "htm" => ReportFormat::Html,
             _ => ReportFormat::Json,
         };
 
@@ -158,6 +165,7 @@ impl Config {
             modules,
             output: cli.output,
             format,
+            baseline: cli.baseline,
             timeout_secs: cli.timeout,
             interface: cli.interface,
             ai_analyze: cli.ai_analyze || cli.chat,
@@ -295,5 +303,23 @@ mod tests {
         assert!(mods.contains(&ModuleKind::Ldap));
         assert!(mods.contains(&ModuleKind::Kerberos));
         assert!(!mods.contains(&ModuleKind::Passive));
+    }
+
+    fn parse_format(s: &str) -> ReportFormat {
+        match s.to_lowercase().as_str() {
+            "markdown" | "md" => ReportFormat::Markdown,
+            "html" | "htm" => ReportFormat::Html,
+            _ => ReportFormat::Json,
+        }
+    }
+
+    #[test]
+    fn test_parse_format() {
+        assert!(matches!(parse_format("html"), ReportFormat::Html));
+        assert!(matches!(parse_format("HTM"), ReportFormat::Html));
+        assert!(matches!(parse_format("md"), ReportFormat::Markdown));
+        assert!(matches!(parse_format("markdown"), ReportFormat::Markdown));
+        assert!(matches!(parse_format("json"), ReportFormat::Json));
+        assert!(matches!(parse_format("nonsense"), ReportFormat::Json));
     }
 }

@@ -122,7 +122,7 @@ pub async fn query_privileged_groups(ldap: &mut Ldap, base_dn: &str) -> anyhow::
         let group_filter = format!("(&(objectClass=group)(cn={}))", group_name);
         let group_objs = search(ldap, base_dn, &group_filter, &["distinguishedName"]).await?;
 
-        let group_dn = match group_objs.first().and_then(|o| Some(o.dn.as_str())) {
+        let group_dn = match group_objs.first().map(|o| o.dn.as_str()) {
             Some(dn) => dn.to_string(),
             None => continue,
         };

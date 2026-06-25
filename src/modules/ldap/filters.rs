@@ -1,7 +1,7 @@
-/// LDAP filter strings — centralized for audit and maintenance.
-///
-/// All filters use standard LDAP query syntax per RFC 4515.
-/// userAccountControl bit matching uses OID 1.2.840.113556.1.4.803 (bitwise AND).
+//! LDAP filter strings — centralized for audit and maintenance.
+//!
+//! All filters use standard LDAP query syntax per RFC 4515.
+//! userAccountControl bit matching uses OID 1.2.840.113556.1.4.803 (bitwise AND).
 
 /// Find accounts with DONT_REQ_PREAUTH (userAccountControl bit 22 = 0x400000).
 pub const ASREP_CANDIDATES: &str = "(userAccountControl:1.2.840.113556.1.4.803:=4194304)";
