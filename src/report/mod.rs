@@ -2,6 +2,7 @@ pub mod diff;
 pub mod html;
 pub mod json;
 pub mod markdown;
+pub mod sample;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
