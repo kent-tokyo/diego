@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expected finding" (id, severity, confidence) over synthetic `LdapObject`
   fixtures, including a false-positive guard for description-field heuristics.
 
+### Documentation
+- README intro (4 languages) reframed to lead with the defensive / authorised-use
+  posture, removing residual "post-exploitation" wording so it matches the
+  tagline.
+- Added `docs/TESTING.md` (golden / detection / integration / schema test layers
+  and what each does **not** guard) and `docs/DESIGN-safe-mode.md` (design sketch
+  for a defensive-by-default `--mode audit` / `--export-hashes`, not yet
+  implemented).
+- ROADMAP: expanded the reproduction-corpus item into concrete staged milestones
+  (fixture format → load-and-analyze tests → mock LDAP) and listed safe mode.
+
 ### Changed
 - Extracted the sample-report fixture into `diego::report::sample::sample_report`
   so the example, golden test, and schema test share one source of truth.

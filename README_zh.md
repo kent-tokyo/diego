@@ -4,7 +4,7 @@
 
 ---
 
-**DIEGO** 是一个用于 Active Directory 环境的后渗透侦察和安全诊断代理。它完全使用标准域用户凭证运行，不会产生任何噪声网络工件，并以单个静态二进制文件的形式发布。
+**DIEGO** 帮助防御方与授权评估者从标准域用户上下文识别有风险的 Active Directory 配置。它执行只读的 LDAP / Kerberos 诊断，产出结构化证据（JSON / Markdown / HTML / MCP）并支持基线比较——**不写入目录、不执行 OS 命令**。以单个静态二进制文件发布，且不产生噪声网络工件。（并非攻击框架，参见 [Threat Model](docs/THREAT_MODEL.md)。）
 
 ### HTML 报告示例
 

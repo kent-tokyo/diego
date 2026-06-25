@@ -25,6 +25,10 @@ cargo audit                         # optional locally; runs in CI
 CI must be green on all platforms (Linux musl, Windows, plus test/clippy/audit/
 coverage) before a PR is merged.
 
+The test suite is layered (golden / detection / integration / schema / unit) —
+see [docs/TESTING.md](docs/TESTING.md) for what each layer guards and what is not
+yet covered.
+
 ## Adding a detector / finding
 
 1. Add the LDAP query (or Kerberos/passive logic) — e.g. a `query_*` function in

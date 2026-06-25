@@ -22,13 +22,28 @@ Priority is bug fixes, issue triage, and real-user feedback over new features.
   (e.g. Windows Server 2022, ~10k users, multi-domain) and fill in the results
   table in [docs/BENCHMARKS.md](docs/BENCHMARKS.md) (runtime, peak RSS, query
   counts). Methodology is already published; only numbers are pending.
-- **Reproduction corpus.** A redacted LDAP dump / mock domain fixture so issues
-  can be reproduced deterministically in CI without a live DC. This would also
-  let the golden test cover live detection logic end-to-end (today it covers
-  report *format* over a synthetic fixture, not detection).
+- **Reproduction corpus → live-path detection tests (target: 0.3.0).** Today
+  `tests/detection_tests.rs` calls `analyze::build_*` with hand-built
+  `LdapObject`s. To cover the full fetch→analyze path deterministically without
+  a live DC, in stages:
+  1. **Define a fixture format**: recorded/redacted LDAP responses as JSON
+     (`SearchEntry` → `LdapObject`), stored under `tests/corpus/`.
+  2. **Load-and-analyze tests**: read those fixtures and run them through
+     `analyze::build_*`, asserting findings — one step more realistic than the
+     current synthetic-object calls.
+  3. **(stretch) Lightweight mock LDAP server** so the filter/fetch side
+     (`queries.rs`) is exercised end-to-end too.
+
+  Status: the **analysis** side is already unit-tested (Phase 5); what remains is
+  exercising it from recorded directory data and, eventually, the fetch layer.
 
 ## Future design (not yet — intentionally deferred)
 
+- **Safe mode (`--mode audit` / `--export-hashes`).** Make the *defensive*
+  output the default: `--mode audit` reports findings without emitting
+  crackable hash material, and offensive output is gated behind an explicit
+  `--mode full` + `--export-hashes` opt-in. **Designed, not implemented** — see
+  [docs/DESIGN-safe-mode.md](docs/DESIGN-safe-mode.md).
 - **Plugin architecture.** Refactor detectors behind a `trait Detector` and a
   `detectors/` directory once the detector count grows (it is ~13 today; this is
   premature now). Lowers the barrier for external contributors.
