@@ -22,6 +22,12 @@ use self::queries::{
 
 pub struct LdapModule;
 
+impl Default for LdapModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LdapModule {
     pub fn new() -> Self {
         LdapModule
@@ -231,7 +237,9 @@ impl DiagnosticModule for LdapModule {
                     "Change the account's password if it was exposed",
                     "Audit all accounts for credential material in description, comment, and info attributes",
                     "Implement a policy prohibiting credentials in AD attribute fields",
-                ]));
+                ])
+                // Heuristic keyword match on a free-text field — needs human review.
+                .with_confidence(crate::report::Confidence::Medium));
             }
         }
 
@@ -394,7 +402,7 @@ impl DiagnosticModule for LdapModule {
                 Some(format!(
                     "Members of '{}' have elevated privileges that can be abused for lateral movement or DA escalation.",
                     group_name
-                ).into()),
+                )),
             )
             .with_llm_context(format!(
                 "Group '{}' has {} member(s): {}. \
@@ -445,7 +453,7 @@ impl DiagnosticModule for LdapModule {
                 Some(format!(
                     "Service account '{}' has SPNs registered. Old password + Kerberoasting = high crackability.",
                     name
-                ).into()),
+                )),
             )
             .with_llm_context(format!(
                 "Service account '{}' (SPNs: {}) has not had its password changed in ~{} days. \

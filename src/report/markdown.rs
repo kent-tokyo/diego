@@ -37,6 +37,29 @@ pub fn generate(report: &Report) -> String {
         out.push_str("---\n\n");
     }
 
+    // ── Baseline Diff (if present) ────────────────────────────────────────────
+    if let Some(d) = &report.diff {
+        out.push_str("## Baseline Diff\n\n");
+        out.push_str(&format!(
+            "_Compared against baseline from {}_\n\n",
+            d.baseline_generated_at.format("%Y-%m-%d %H:%M:%S UTC"),
+        ));
+        out.push_str(&format!("🆕 **New ({})**\n\n", d.new.len()));
+        for e in &d.new {
+            out.push_str(&format!("- [{}] {} (`{}`)\n", e.severity, e.title, e.id));
+        }
+        out.push_str(&format!("\n✅ **Resolved ({})**\n\n", d.resolved.len()));
+        for e in &d.resolved {
+            out.push_str(&format!("- [{}] {} (`{}`)\n", e.severity, e.title, e.id));
+        }
+        out.push_str(&format!("\n⚠️ **Severity Changed ({})**\n\n", d.severity_changed.len()));
+        for c in &d.severity_changed {
+            out.push_str(&format!("- {} (`{}`): {} → {}\n", c.title, c.id, c.from, c.to));
+        }
+        out.push_str(&format!("\n_Unchanged: {}_\n\n", d.unchanged_count));
+        out.push_str("---\n\n");
+    }
+
     // ── Executive Summary ─────────────────────────────────────────────────────
     out.push_str("## Executive Summary\n\n");
     out.push_str(&format!(
@@ -72,8 +95,8 @@ pub fn generate(report: &Report) -> String {
             Severity::Info => "🔵",
         };
         out.push_str(&format!(
-            "### {} [{}] {} ({})\n\n",
-            icon, f.severity, f.title, f.id
+            "### {} [{} / Confidence: {}] {} ({})\n\n",
+            icon, f.severity, f.confidence, f.title, f.id
         ));
         out.push_str(&format!("**Module**: `{}`", f.module));
         if let Some(mitre) = &f.mitre_id {

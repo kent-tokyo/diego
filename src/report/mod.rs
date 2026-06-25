@@ -1,3 +1,5 @@
+pub mod diff;
+pub mod html;
 pub mod json;
 pub mod markdown;
 
@@ -30,11 +32,43 @@ impl std::fmt::Display for Severity {
     }
 }
 
+/// How sure diego is that a finding is a true positive — distinct from how
+/// damaging it would be (`Severity`).
+///
+/// - `High`   — deterministic evidence (a captured hash, a UAC flag bit, an
+///   explicit delegation attribute). Effectively no false-positive risk.
+/// - `Medium` — heuristic detection (e.g. keyword match in a description
+///   field, a spray-feasibility estimate). Plausible but warrants review.
+/// - `Low`    — circumstantial / inferred; treat as a lead, not a conclusion.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum Confidence {
+    #[default]
+    High,
+    Medium,
+    Low,
+}
+
+impl std::fmt::Display for Confidence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Confidence::High => write!(f, "HIGH"),
+            Confidence::Medium => write!(f, "MEDIUM"),
+            Confidence::Low => write!(f, "LOW"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Finding {
     pub id: String,
     pub module: String,
     pub severity: Severity,
+    /// Confidence that this finding is a true positive (default `High`).
+    /// `#[serde(default)]` so baseline reports written by older diego builds
+    /// (which lack this field) still deserialize for `--baseline` diffs.
+    #[serde(default)]
+    pub confidence: Confidence,
     pub title: String,
     pub description: String,
     pub evidence: serde_json::Value,
@@ -66,6 +100,7 @@ impl Finding {
             id: id.into(),
             module: module.into(),
             severity,
+            confidence: Confidence::High,
             title: title.into(),
             description: description.into(),
             evidence,
@@ -92,6 +127,12 @@ impl Finding {
     /// Builder: set a MITRE ATT&CK technique ID.
     pub fn with_mitre(mut self, id: impl Into<String>) -> Self {
         self.mitre_id = Some(id.into());
+        self
+    }
+
+    /// Builder: set detection confidence (defaults to `High`).
+    pub fn with_confidence(mut self, confidence: Confidence) -> Self {
+        self.confidence = confidence;
         self
     }
 
@@ -152,6 +193,9 @@ pub struct Report {
     pub summary: Summary,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ai_analysis: Option<AiAnalysis>,
+    /// Comparison against a prior baseline report, if `--baseline` was given.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diff: Option<diff::ReportDiff>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -188,6 +232,7 @@ impl Report {
             findings,
             summary,
             ai_analysis: None,
+            diff: None,
         }
     }
 
@@ -196,10 +241,16 @@ impl Report {
         self
     }
 
+    pub fn with_diff(mut self, diff: diff::ReportDiff) -> Self {
+        self.diff = Some(diff);
+        self
+    }
+
     pub async fn write(&self, config: &Arc<Config>) -> anyhow::Result<()> {
         let content = match config.format {
             ReportFormat::Json => json::generate(self)?,
             ReportFormat::Markdown => markdown::generate(self),
+            ReportFormat::Html => html::generate(self),
         };
 
         match &config.output {
