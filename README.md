@@ -1,6 +1,6 @@
 # DIEGO - Domain Intranet Elusive Guardian & Offensive-Scouter
 
-Non-privileged Active Directory security diagnostic agent, written in Pure Rust.
+**Active Directory security diagnostics for defenders** — a non-privileged, read-only audit agent for **authorised assessment and defensive baselining**, written in Pure Rust. (Not an exploitation framework — see the [Threat Model](docs/THREAT_MODEL.md).)
 
 ---
 

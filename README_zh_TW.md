@@ -1,6 +1,6 @@
 # DIEGO - Domain Intranet Elusive Guardian & Offensive-Scouter
 
-無特權 Active Directory 安全診斷代理，使用純 Rust 編寫。
+**面向防禦方的 Active Directory 安全診斷** — 純 Rust 編寫，無特權、唯讀，用於**授權評估與防禦基線**（並非攻擊框架，參見 [Threat Model](docs/THREAT_MODEL.md)）。
 
 ---
 
