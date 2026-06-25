@@ -4,7 +4,7 @@
 
 ---
 
-**DIEGO** is a post-exploitation reconnaissance and security diagnostic agent for Active Directory environments. It operates entirely with standard domain user credentials, produces no noisy network artefacts, and ships as a single static binary.
+**DIEGO** helps defenders and authorised assessors identify risky Active Directory configurations from a standard domain-user context. It performs read-only LDAP/Kerberos diagnostics, produces structured evidence (JSON / Markdown / HTML / MCP), and supports baseline comparison — with **no directory writes and no OS command execution**. It ships as a single static binary with no noisy network artefacts. (Not an exploitation framework — see the [Threat Model](docs/THREAT_MODEL.md).)
 
 ### Sample HTML Report
 
@@ -504,7 +504,7 @@ The release profile applies LTO, single codegen unit, and binary stripping to mi
 
 - [Threat Model](docs/THREAT_MODEL.md) — goals, non-goals, detection assumptions, supported environments, limitations
 - [Roadmap](ROADMAP.md) — 0.2.x stabilisation focus; parked/deferred items
-- [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)
+- [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) · [Testing layers](docs/TESTING.md)
 - [Report JSON Schema](docs/report.schema.json) — the output contract for integrators
 - [Benchmarks](docs/BENCHMARKS.md) — methodology (results pending lab validation)
 - [Changelog](CHANGELOG.md)
