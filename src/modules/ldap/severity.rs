@@ -25,7 +25,6 @@ pub fn password_policy_severity(min_len: u32, lockout_threshold: u32) -> Severit
 
 /// Determine severity for password age.
 /// Stale if > 365 days on a service account (increases crack likelihood).
-#[allow(dead_code)] // Severity helper used by tests; wired into stale-pwd findings later
 pub fn password_age_severity(age_days: i64) -> Severity {
     if age_days > 365 {
         Severity::Medium // Increased offline crack risk
@@ -39,7 +38,6 @@ pub fn password_age_severity(age_days: i64) -> Severity {
 /// Determine severity for Kerberos encryption type.
 /// RC4 only → Medium (weak, should support AES)
 /// AES present → Low (acceptable)
-#[allow(dead_code)] // Severity helper used by tests; wired into SPN findings later
 pub fn encryption_type_severity(has_aes: bool, rc4_only: bool) -> Severity {
     if rc4_only {
         Severity::Medium // Weak, should enable AES
