@@ -47,7 +47,7 @@ pub fn capture_cleartext(
 
     let (_, mut rx) = match datalink::channel(iface, config)? {
         Channel::Ethernet(tx, rx) => (tx, rx),
-        _ => return Err(io::Error::new(io::ErrorKind::Other, "Unsupported channel type")),
+        _ => return Err(io::Error::other("Unsupported channel type")),
     };
 
     let mut captures = Vec::new();
@@ -61,11 +61,11 @@ pub fn capture_cleartext(
         }
         match rx.next() {
             Ok(frame) => {
-                if let Some(eth) = EthernetPacket::new(frame) {
-                    if eth.get_ethertype() == EtherTypes::Ipv4 {
-                        if let Some(ip) = Ipv4Packet::new(eth.payload()) {
-                            if ip.get_next_level_protocol() == IpNextHeaderProtocols::Tcp {
-                                if let Some(tcp) = TcpPacket::new(ip.payload()) {
+                if let Some(eth) = EthernetPacket::new(frame)
+                    && eth.get_ethertype() == EtherTypes::Ipv4
+                        && let Some(ip) = Ipv4Packet::new(eth.payload())
+                            && ip.get_next_level_protocol() == IpNextHeaderProtocols::Tcp
+                                && let Some(tcp) = TcpPacket::new(ip.payload()) {
                                     let payload = tcp.payload();
                                     if payload.is_empty() {
                                         continue;
@@ -84,10 +84,6 @@ pub fn capture_cleartext(
                                         captures.push(c);
                                     }
                                 }
-                            }
-                        }
-                    }
-                }
             }
             Err(e) if e.kind() == io::ErrorKind::TimedOut => continue,
             Err(e) => {
@@ -180,7 +176,7 @@ fn base64_decode(encoded: &str) -> String {
             bit_count += 6;
             if bit_count >= 8 {
                 bit_count -= 8;
-                result.push((bits >> bit_count) as u8 & 0xFF);
+                result.push((bits >> bit_count) as u8);
             }
         }
     }

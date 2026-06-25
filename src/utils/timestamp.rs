@@ -1,6 +1,6 @@
-/// Windows FILETIME to Unix timestamp conversions.
-/// FILETIME is 100-nanosecond intervals since 1601-01-01 00:00:00 UTC.
-/// Unix time is seconds since 1970-01-01 00:00:00 UTC.
+//! Windows FILETIME to Unix timestamp conversions.
+//! FILETIME is 100-nanosecond intervals since 1601-01-01 00:00:00 UTC.
+//! Unix time is seconds since 1970-01-01 00:00:00 UTC.
 
 pub const WINDOWS_EPOCH_DELTA: i64 = 116_444_736_000_000_000;
 pub const FILETIME_SCALE: i64 = 10_000_000;

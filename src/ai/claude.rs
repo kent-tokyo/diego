@@ -73,7 +73,10 @@ struct StreamEvent {
 // ─── Client ───────────────────────────────────────────────────────────────────
 
 pub struct ClaudeClient {
-    api_key: Zeroizing<String>, // API key zeroized on drop
+    // Retained so the key material is zeroized on drop, even though the
+    // configured reqwest client already carries the auth header.
+    #[allow(dead_code)]
+    api_key: Zeroizing<String>,
     pub model: String,
     client: reqwest::Client,
 }
@@ -195,32 +198,24 @@ impl ClaudeClient {
             buffer.push_str(&String::from_utf8_lossy(&bytes));
 
             // Parse SSE lines: "data: {...}"
-            loop {
-                if let Some(newline_pos) = buffer.find('\n') {
-                    let line = buffer[..newline_pos].trim().to_string();
-                    buffer = buffer[newline_pos + 1..].to_string();
+            while let Some(newline_pos) = buffer.find('\n') {
+                let line = buffer[..newline_pos].trim().to_string();
+                buffer = buffer[newline_pos + 1..].to_string();
 
-                    if let Some(data) = line.strip_prefix("data: ") {
-                        if data == "[DONE]" {
-                            break;
-                        }
-                        if let Ok(event) = serde_json::from_str::<StreamEvent>(data) {
-                            if event.kind == "content_block_delta" {
-                                if let Some(delta) = event.delta {
-                                    if delta.kind == "text_delta" {
-                                        if let Some(text) = delta.text {
-                                            print!("{}", text);
-                                            use std::io::Write;
-                                            std::io::stdout().flush().ok();
-                                            full_text.push_str(&text);
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                if let Some(data) = line.strip_prefix("data: ") {
+                    if data == "[DONE]" {
+                        break;
                     }
-                } else {
-                    break;
+                    if let Ok(event) = serde_json::from_str::<StreamEvent>(data)
+                        && event.kind == "content_block_delta"
+                            && let Some(delta) = event.delta
+                                && delta.kind == "text_delta"
+                                    && let Some(text) = delta.text {
+                                        print!("{}", text);
+                                        use std::io::Write;
+                                        std::io::stdout().flush().ok();
+                                        full_text.push_str(&text);
+                                    }
                 }
             }
         }

@@ -215,7 +215,7 @@ fn decode_nbt_name(encoded: &[u8]) -> String {
         if chunk.len() < 2 {
             break;
         }
-        let c = (((chunk[0] as u8 - b'A') << 4) | (chunk[1] as u8 - b'A')) as char;
+        let c = (((chunk[0] - b'A') << 4) | (chunk[1] - b'A')) as char;
         if c.is_ascii() {
             name.push(c);
         }

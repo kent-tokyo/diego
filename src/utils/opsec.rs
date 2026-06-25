@@ -1,4 +1,4 @@
-/// OPSEC utilities: jitter, nonce generation, timing.
+//! OPSEC utilities: jitter, nonce generation, timing.
 
 use std::time::Duration;
 
