@@ -78,6 +78,12 @@ windows-sys = { version = "0.48", features = [
     "Win32_System_Threading",
 ], optional = true }
 
+[dev-dependencies]
+# Validate the JSON report against docs/report.schema.json. default-features off
+# drops the optional HTTP/file remote-ref resolvers (and their dep surface) —
+# the schema is self-contained.
+jsonschema = { version = "0.46", default-features = false }
+
 [features]
 default = []
 windows-native = ["dep:windows-sys"]
