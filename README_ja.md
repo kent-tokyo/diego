@@ -1,6 +1,6 @@
 # DIEGO - Domain Intranet Elusive Guardian & Offensive-Scouter
 
-Pure Rust で実装された非特権 Active Directory セキュリティ診断エージェント
+**防御者のための Active Directory セキュリティ診断** — Pure Rust 製、非特権・読み取り専用。**認可された評価（authorised assessment）と防御ベースライン**を目的とします（攻撃フレームワークではありません。[Threat Model](docs/THREAT_MODEL.md) 参照）。
 
 ---
 

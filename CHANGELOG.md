@@ -18,9 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`ROADMAP.md`** stating the 0.2.x stabilisation focus and honestly parking
   lab-dependent and deferred items.
 
+### Added
+- **Detection tests** (`tests/detection_tests.rs`): assert "directory object →
+  expected finding" (id, severity, confidence) over synthetic `LdapObject`
+  fixtures, including a false-positive guard for description-field heuristics.
+
 ### Changed
 - Extracted the sample-report fixture into `diego::report::sample::sample_report`
   so the example, golden test, and schema test share one source of truth.
+- Split the LDAP module into fetch (`queries.rs`) and pure analysis
+  (`modules/ldap/analyze.rs`), making detection logic unit-testable.
+- The CLI binary (`main.rs`) now consumes the `diego` library crate instead of
+  re-declaring its modules, removing the binary-only `#![allow(dead_code)]` and
+  the double-compilation it papered over.
 
 ## [0.2.0] - 2026-06-25
 
