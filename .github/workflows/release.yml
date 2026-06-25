@@ -1,0 +1,92 @@
+name: Release
+
+# Tag-triggered release: builds the static Linux (musl) and Windows binaries and
+# attaches them to a GitHub Release. Cut a release by pushing a tag, e.g.:
+#   git tag v0.2.0 && git push origin v0.2.0
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64-musl
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            bin: diego
+            artifact: diego-linux-x86_64-musl
+          - name: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: diego.exe
+            artifact: diego-windows-x86_64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Install musl build deps
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools cmake
+      - name: Install Npcap SDK
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://npcap.com/dist/npcap-sdk-1.13.zip" -OutFile "$env:RUNNER_TEMP\npcap-sdk.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\npcap-sdk.zip" -DestinationPath "$env:RUNNER_TEMP\npcap-sdk"
+          "LIB=$env:RUNNER_TEMP\npcap-sdk\Lib\x64;$env:LIB" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - run: cargo build --release --target ${{ matrix.target }}
+      - name: Stage binary
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "dist/${{ matrix.artifact }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            ## What's New
+            See the [CHANGELOG](https://github.com/kent-tokyo/diego/blob/main/CHANGELOG.md) for the full, categorised list (Added / Changed / Fixed / Security).
+
+            ## Migration
+            - No CLI breaking changes. New flags: `--format html`, `--baseline <prior.json>`.
+            - Reports now include a `confidence` field; baseline JSON from older
+              builds still loads (confidence defaults to HIGH).
+
+            ## Known limitations
+            - **Detection:** diego avoids host-based EDR runtimes, but DC-side
+              sensors (e.g. Microsoft Defender for Identity) can still observe
+              Kerberoasting / AS-REP behaviour. See the
+              [Threat Model](https://github.com/kent-tokyo/diego/blob/main/docs/THREAT_MODEL.md).
+            - **Performance:** not yet benchmarked at scale —
+              [BENCHMARKS](https://github.com/kent-tokyo/diego/blob/main/docs/BENCHMARKS.md) (results pending).
+            - **Binaries:** Linux build is `x86_64` musl static; Windows is `x86_64` MSVC.
+
+            ## Demo
+            Live sample report: https://kent-tokyo.github.io/diego/sample-report.html
