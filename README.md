@@ -503,6 +503,9 @@ The release profile applies LTO, single codegen unit, and binary stripping to mi
 ## Documentation
 
 - [Threat Model](docs/THREAT_MODEL.md) — goals, non-goals, detection assumptions, supported environments, limitations
+- [Roadmap](ROADMAP.md) — 0.2.x stabilisation focus; parked/deferred items
+- [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)
+- [Report JSON Schema](docs/report.schema.json) — the output contract for integrators
 - [Benchmarks](docs/BENCHMARKS.md) — methodology (results pending lab validation)
 - [Changelog](CHANGELOG.md)
 - [Sample report (HTML)](docs/sample-report.html) · [sample JSON](docs/sample-findings.json) · [▶ live demo](https://kent-tokyo.github.io/diego/sample-report.html)
