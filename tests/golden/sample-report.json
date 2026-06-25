@@ -1,0 +1,147 @@
+{
+  "tool": "diego",
+  "version": "0.2.0",
+  "domain": "corp.local",
+  "generated_at": "<normalized>",
+  "scan_context": {
+    "dc_ip": "10.0.0.1",
+    "domain": "corp.local",
+    "username": "jdoe",
+    "privilege_level": "standard_user",
+    "modules_run": [
+      "ldap",
+      "kerberos",
+      "passive"
+    ],
+    "duration_secs": 7
+  },
+  "findings": [
+    {
+      "id": "KRB-ASREP-svc_backup",
+      "module": "kerberos",
+      "severity": "CRITICAL",
+      "confidence": "HIGH",
+      "title": "AS-REP Roastable Account",
+      "description": "Account 'svc_backup' has Kerberos pre-authentication disabled, allowing offline cracking of its AS-REP hash.",
+      "evidence": {
+        "account": "svc_backup",
+        "hash": "$krb5asrep$23$svc_backup@CORP.LOCAL:..."
+      },
+      "attack_path_hint": "AS-REP roast svc_backup, then crack offline to gain initial credentials.",
+      "timestamp": "<normalized>",
+      "llm_context": "",
+      "remediation_steps": [
+        "Enable Kerberos pre-authentication on svc_backup"
+      ],
+      "mitre_id": "T1558.004"
+    },
+    {
+      "id": "KRB-KERBEROAST-mssql",
+      "module": "kerberos",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "title": "Kerberoastable Service Account",
+      "description": "SPN account 'mssql-svc' uses RC4 and a weak password.",
+      "evidence": {
+        "enc": "RC4-HMAC",
+        "spn": "MSSQLSvc/db01.corp.local"
+      },
+      "attack_path_hint": "Kerberoast mssql-svc, crack offline, pivot to DB host.",
+      "timestamp": "<normalized>",
+      "llm_context": "",
+      "remediation_steps": [],
+      "mitre_id": "T1558.003"
+    },
+    {
+      "id": "LDAP-UNCONSTRAINED-host01",
+      "module": "ldap",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "title": "Unconstrained Delegation",
+      "description": "Computer 'admin-host-01' is configured for unconstrained delegation.",
+      "evidence": {
+        "computer": "admin-host-01"
+      },
+      "attack_path_hint": "Coerce DC auth to admin-host-01, capture TGT, impersonate.",
+      "timestamp": "<normalized>",
+      "llm_context": "",
+      "remediation_steps": []
+    },
+    {
+      "id": "LDAP-DESC-leak-helpdesk",
+      "module": "ldap",
+      "severity": "MEDIUM",
+      "confidence": "MEDIUM",
+      "title": "Credential in Description Field",
+      "description": "Account 'helpdesk' description contains a possible password: 'Welcome2024! <b>do not change</b>'.",
+      "evidence": {
+        "account": "helpdesk",
+        "description": "Welcome2024! <b>do not change</b>"
+      },
+      "attack_path_hint": null,
+      "timestamp": "<normalized>",
+      "llm_context": "",
+      "remediation_steps": []
+    },
+    {
+      "id": "LDAP-PWPOLICY",
+      "module": "ldap",
+      "severity": "LOW",
+      "confidence": "HIGH",
+      "title": "Weak Lockout Threshold",
+      "description": "Account lockout threshold is high (10), enabling password spraying.",
+      "evidence": {
+        "lockout_threshold": 10,
+        "min_length": 7
+      },
+      "attack_path_hint": null,
+      "timestamp": "<normalized>",
+      "llm_context": "",
+      "remediation_steps": []
+    }
+  ],
+  "summary": {
+    "critical": 1,
+    "high": 2,
+    "medium": 1,
+    "low": 1,
+    "info": 0,
+    "total": 5
+  },
+  "diff": {
+    "baseline_generated_at": "<normalized>",
+    "new": [
+      {
+        "id": "KRB-KERBEROAST-mssql",
+        "title": "Kerberoastable Service Account",
+        "severity": "HIGH"
+      },
+      {
+        "id": "LDAP-UNCONSTRAINED-host01",
+        "title": "Unconstrained Delegation",
+        "severity": "HIGH"
+      },
+      {
+        "id": "LDAP-PWPOLICY",
+        "title": "Weak Lockout Threshold",
+        "severity": "LOW"
+      }
+    ],
+    "resolved": [
+      {
+        "id": "LDAP-OLD-RESOLVED",
+        "title": "Previously-flagged stale admin",
+        "severity": "HIGH"
+      }
+    ],
+    "severity_changed": [
+      {
+        "id": "LDAP-DESC-leak-helpdesk",
+        "title": "Credential in Description Field",
+        "from": "LOW",
+        "to": "MEDIUM"
+      }
+    ],
+    "unchanged_count": 1
+  }
+}

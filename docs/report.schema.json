@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kent-tokyo.github.io/diego/report.schema.json",
+  "title": "diego report",
+  "description": "Schema for the JSON report produced by diego (--format json). This is the integration contract; fields marked optional are omitted when absent.",
+  "type": "object",
+  "required": ["tool", "version", "domain", "generated_at", "scan_context", "findings", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "tool": { "type": "string", "const": "diego" },
+    "version": { "type": "string" },
+    "domain": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "scan_context": { "$ref": "#/$defs/scanContext" },
+    "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+    "summary": { "$ref": "#/$defs/summary" },
+    "ai_analysis": { "$ref": "#/$defs/aiAnalysis" },
+    "diff": { "$ref": "#/$defs/diff" }
+  },
+  "$defs": {
+    "severity": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
+    "confidence": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"] },
+    "scanContext": {
+      "type": "object",
+      "required": ["dc_ip", "domain", "username", "privilege_level", "modules_run", "duration_secs"],
+      "additionalProperties": false,
+      "properties": {
+        "dc_ip": { "type": "string" },
+        "domain": { "type": "string" },
+        "username": { "type": "string" },
+        "privilege_level": { "type": "string" },
+        "modules_run": { "type": "array", "items": { "type": "string" } },
+        "duration_secs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["id", "module", "severity", "confidence", "title", "description", "evidence", "attack_path_hint", "timestamp", "llm_context", "remediation_steps"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "module": { "type": "string" },
+        "severity": { "$ref": "#/$defs/severity" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "evidence": true,
+        "attack_path_hint": { "type": ["string", "null"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "llm_context": { "type": "string" },
+        "remediation_steps": { "type": "array", "items": { "type": "string" } },
+        "mitre_id": { "type": "string" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["critical", "high", "medium", "low", "info", "total"],
+      "additionalProperties": false,
+      "properties": {
+        "critical": { "type": "integer", "minimum": 0 },
+        "high": { "type": "integer", "minimum": 0 },
+        "medium": { "type": "integer", "minimum": 0 },
+        "low": { "type": "integer", "minimum": 0 },
+        "info": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "aiAnalysis": {
+      "type": "object",
+      "required": ["model", "attack_narrative", "critical_path", "immediate_actions", "generated_at"],
+      "additionalProperties": false,
+      "properties": {
+        "model": { "type": "string" },
+        "attack_narrative": { "type": "string" },
+        "critical_path": { "type": "array", "items": { "type": "string" } },
+        "immediate_actions": { "type": "array", "items": { "type": "string" } },
+        "generated_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "diffEntry": {
+      "type": "object",
+      "required": ["id", "title", "severity"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "severity": { "$ref": "#/$defs/severity" }
+      }
+    },
+    "severityChange": {
+      "type": "object",
+      "required": ["id", "title", "from", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "from": { "$ref": "#/$defs/severity" },
+        "to": { "$ref": "#/$defs/severity" }
+      }
+    },
+    "diff": {
+      "type": "object",
+      "required": ["baseline_generated_at", "new", "resolved", "severity_changed", "unchanged_count"],
+      "additionalProperties": false,
+      "properties": {
+        "baseline_generated_at": { "type": "string", "format": "date-time" },
+        "new": { "type": "array", "items": { "$ref": "#/$defs/diffEntry" } },
+        "resolved": { "type": "array", "items": { "$ref": "#/$defs/diffEntry" } },
+        "severity_changed": { "type": "array", "items": { "$ref": "#/$defs/severityChange" } },
+        "unchanged_count": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

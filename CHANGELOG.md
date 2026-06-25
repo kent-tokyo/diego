@@ -5,6 +5,23 @@ All notable changes to diego are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Published JSON Schema** for the report (`docs/report.schema.json`) — the
+  integration contract for downstream/CI consumers — with a test validating the
+  sample output against it.
+- **Golden test** (`tests/golden_test.rs`) guarding the serialized report
+  against accidental shape/finding-count drift (timestamps normalised).
+- **Contributor front-door:** `CONTRIBUTING.md`, `SECURITY.md` (coordinated
+  vulnerability disclosure), GitHub issue/PR templates.
+- **`ROADMAP.md`** stating the 0.2.x stabilisation focus and honestly parking
+  lab-dependent and deferred items.
+
+### Changed
+- Extracted the sample-report fixture into `diego::report::sample::sample_report`
+  so the example, golden test, and schema test share one source of truth.
+
 ## [0.2.0] - 2026-06-25
 
 ### Added

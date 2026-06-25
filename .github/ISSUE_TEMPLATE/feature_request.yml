@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest a detector or capability
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        diego is in a stabilisation phase (see ROADMAP.md). New detectors are
+        welcome, but must stay unprivileged and read-only (see THREAT_MODEL.md).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed detector / capability
+      description: What would diego check, and what finding(s) would it emit?
+    validations:
+      required: true
+  - type: textarea
+    id: opsec
+    attributes:
+      label: OPSEC considerations
+      description: Can it be done read-only, without command execution? Detection profile?
