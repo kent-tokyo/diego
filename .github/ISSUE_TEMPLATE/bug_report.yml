@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a defect in diego (not an AD misconfiguration it found)
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For **security vulnerabilities**, do not file here —
+        see SECURITY.md. Only test against directories you are authorised to assess.
+  - type: input
+    id: version
+    attributes:
+      label: diego version
+      description: Output of `diego --version`
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux (musl static)
+        - Linux (glibc)
+        - Windows
+        - macOS
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The command you ran (redact credentials/hosts) and what happened.
+      placeholder: |
+        1. diego --dc ... --domain ... --modules ldap --format json
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output / logs
+      description: Redact account names, hostnames, and hashes.
+      render: text
