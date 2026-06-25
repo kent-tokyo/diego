@@ -1,30 +1,18 @@
-// The binary re-declares the same modules the library crate exposes, so the
-// module source is compiled twice. Items that are part of the library's public
-// API but unused by this CLI binary would otherwise be flagged as dead code in
-// the binary context only. The library crate (lib.rs) keeps full dead_code
-// enforcement, which is where real unused-code regressions are caught.
-#![allow(dead_code)]
-
-mod ai;
-mod config;
-mod error;
-mod modules;
-mod mcp;
-mod report;
-
 use std::sync::Arc;
 use std::time::Instant;
 
 use clap::Parser;
 
-use config::{Cli, Config, ModuleKind};
-use modules::{
+use diego::ai;
+use diego::config::{Cli, Config, ModuleKind};
+use diego::mcp;
+use diego::modules::{
     kerberos::KerberosModule,
     ldap::{run_ldap_and_extract_context, LdapModule},
     passive::PassiveModule,
     DiagnosticModule, LdapContext,
 };
-use report::{make_scan_context, Report};
+use diego::report::{self, make_scan_context, Report};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
