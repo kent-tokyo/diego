@@ -73,22 +73,9 @@ diego --mcp
    diego --dc 10.0.0.1 --domain corp.local --username jdoe
    ```
 
-2. **Kerberos keytab** — `~/.diego/keytab`（無需密碼）
-   ```bash
-   # 設置 keytab（需要 kinit 或 ktutil）
-   ktutil: addent -password -p user@CORP.LOCAL -k 1 -e aes256-cts-hmac-sha1-96
-   ktutil: write_kt ~/.diego/keytab
-   
-   # 然後無密碼執行
-   diego --dc 10.0.0.1 --domain corp.local --username jdoe
-   ```
+2. **偵測到 Kerberos keytab** — 偵測並記錄 `~/.diego/keytab` 的存在，然後回退至互動式提示（GSSAPI 綁定尚未實作，計畫於未來版本支援）
 
-3. **Kerberos TGT 快取** — `KRB5CCNAME` 環境變數或 `/tmp/krb5cc_*`（無需密碼）
-   ```bash
-   # 如果已登入 Kerberos 領域：
-   klist  # 檢查快取的票證
-   diego --dc 10.0.0.1 --domain corp.local --username jdoe
-   ```
+3. **偵測到 Kerberos TGT 快取** — 偵測並記錄 `KRB5CCNAME` / `/tmp/krb5cc_*` 的存在，然後回退至互動式提示（GSSAPI 綁定尚未實作，計畫於未來版本支援）
 
 4. **互動式提示** — 如果上述都不可用，回退
    ```
