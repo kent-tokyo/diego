@@ -739,7 +739,9 @@ mod tests {
         let account = SpnAccount {
             sam_name: "sqlserver$".to_string(),
             spns: vec!["MSSQLSvc/db01.corp.local:1433".to_string()],
-            supported_enc_types: 0, // 0 = unknown/legacy (RC4 ok)
+            supported_enc_types: 0,
+            pwd_last_set: None,
+            admin_count: 0,
         };
 
         assert_eq!(account.sam_name, "sqlserver$");

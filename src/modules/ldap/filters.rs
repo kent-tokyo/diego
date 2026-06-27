@@ -3,8 +3,10 @@
 //! All filters use standard LDAP query syntax per RFC 4515.
 //! userAccountControl bit matching uses OID 1.2.840.113556.1.4.803 (bitwise AND).
 
-/// Find accounts with DONT_REQ_PREAUTH (userAccountControl bit 22 = 0x400000).
-pub const ASREP_CANDIDATES: &str = "(userAccountControl:1.2.840.113556.1.4.803:=4194304)";
+/// Find enabled person accounts with DONT_REQ_PREAUTH (bit 22 = 0x400000), excluding disabled accounts.
+pub const ASREP_CANDIDATES: &str =
+    "(&(objectCategory=person)(userAccountControl:1.2.840.113556.1.4.803:=4194304)\
+(!(userAccountControl:1.2.840.113556.1.4.803:=2)))";
 
 /// Find service accounts with SPNs, excluding computers and disabled accounts.
 pub const SPN_ACCOUNTS: &str =
@@ -15,9 +17,10 @@ pub const UNCONSTRAINED_DELEGATION: &str =
     "(&(objectCategory=computer)(userAccountControl:1.2.840.113556.1.4.803:=524288))";
 
 /// Find accounts/computers with Constrained Delegation.
-/// Includes msDS-AllowedToDelegateTo OR TRUSTED_TO_AUTH_FOR_DELEGATION flag (bit 20 = 0x100000).
+/// Includes msDS-AllowedToDelegateTo OR TRUSTED_TO_AUTH_FOR_DELEGATION flag (bit 24 = 0x1000000 = 16777216).
+/// Note: 0x100000 (1048576) is NOT_DELEGATED — a common confusion; the correct T2A4D value is 0x1000000.
 pub fn constrained_delegation() -> &'static str {
-    "(|(msDS-AllowedToDelegateTo=*)(userAccountControl:1.2.840.113556.1.4.803:=1048576))"
+    "(|(msDS-AllowedToDelegateTo=*)(userAccountControl:1.2.840.113556.1.4.803:=16777216))"
 }
 
 /// Find objects with Resource-Based Constrained Delegation.
@@ -63,6 +66,13 @@ mod tests {
     }
 
     #[test]
+    fn test_asrep_candidates_excludes_disabled_accounts() {
+        // ACCOUNTDISABLE = 0x2 = 2 must be excluded to avoid false positives
+        assert!(ASREP_CANDIDATES.contains("!(userAccountControl:1.2.840.113556.1.4.803:=2)"));
+        assert!(ASREP_CANDIDATES.contains("objectCategory=person"));
+    }
+
+    #[test]
     fn test_spn_accounts_filter_structure() {
         // Should check for: servicePrincipalName=*, not computer, not disabled
         assert!(SPN_ACCOUNTS.contains("servicePrincipalName"));
@@ -87,7 +97,9 @@ mod tests {
     fn test_constrained_delegation_generates_valid_ldap() {
         let filter = constrained_delegation();
         assert!(filter.contains("msDS-AllowedToDelegateTo"));
-        assert!(filter.contains("1048576")); // bit 20 = 0x100000
+        // T2A4D = TRUSTED_TO_AUTH_FOR_DELEGATION = 0x1000000 = 16777216 (NOT 0x100000/1048576 which is NOT_DELEGATED)
+        assert!(filter.contains("16777216"));
+        assert!(!filter.contains("1048576"), "must not use NOT_DELEGATED bit by mistake");
         assert!(filter.starts_with("(|")); // OR operator
     }
 

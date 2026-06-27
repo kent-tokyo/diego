@@ -56,22 +56,54 @@ pub fn extract_spn_accounts(objects: &[LdapObject]) -> Vec<SpnAccount> {
                 return None;
             }
             let supported_enc_types = o.get_u32("msDS-SupportedEncryptionTypes").unwrap_or(0);
-            Some(SpnAccount { sam_name, spns, supported_enc_types })
+            let pwd_last_set = o.get_first("pwdLastSet").and_then(|s| s.parse::<i64>().ok());
+            let admin_count = o.get_u32("adminCount").unwrap_or(0);
+            Some(SpnAccount { sam_name, spns, supported_enc_types, pwd_last_set, admin_count })
         })
         .collect()
 }
 
-/// Detect potential hardcoded passwords in the description field
-pub fn detect_description_leak(obj: &LdapObject) -> Option<String> {
+/// Confidence tier for a description-field credential match.
+/// High = explicit credential format; Low = ambiguous term that often appears in business language.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DescLeakConfidence { High, Medium, Low }
+
+/// A detected credential leak in a description field.
+#[derive(Debug, Clone)]
+pub struct DescLeak {
+    pub description: String,
+    pub confidence: DescLeakConfidence,
+}
+
+/// Detect potential hardcoded passwords in the description field.
+///
+/// Three-tier detection:
+/// - High: explicit credential-format patterns (`password=`, `pwd:`, `secret=`, `p@ss`)
+/// - Medium: core credential keywords (`pass`, `pwd`, `secret`, `cred`, `hash`)
+/// - Low: ambiguous terms that appear in business language (`key`, `token`)
+pub fn detect_description_leak(obj: &LdapObject) -> Option<DescLeak> {
     let desc = obj.get_first("description")?;
     let lower = desc.to_lowercase();
-    // Heuristic keywords — flag for human review rather than false-certainty
-    let keywords = ["pass", "pwd", "secret", "cred", "key", "token", "hash", "p@ss"];
-    if keywords.iter().any(|kw| lower.contains(kw)) {
-        Some(desc.to_string())
-    } else {
-        None
+
+    // High: explicit credential-format patterns
+    let high_patterns = ["password=", "password:", "pwd=", "pwd:", "secret=", "secret:", "pass=", "pass:", "p@ss"];
+    if high_patterns.iter().any(|p| lower.contains(p)) {
+        return Some(DescLeak { description: desc.to_string(), confidence: DescLeakConfidence::High });
     }
+
+    // Medium: core keywords that are rarely benign in AD descriptions
+    let medium_keywords = ["pass", "pwd", "secret", "cred", "hash"];
+    if medium_keywords.iter().any(|kw| lower.contains(kw)) {
+        return Some(DescLeak { description: desc.to_string(), confidence: DescLeakConfidence::Medium });
+    }
+
+    // Low: terms that appear in business language ("key account manager", "token migration")
+    let low_keywords = ["key", "token"];
+    if low_keywords.iter().any(|kw| lower.contains(kw)) {
+        return Some(DescLeak { description: desc.to_string(), confidence: DescLeakConfidence::Low });
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -108,5 +140,45 @@ mod tests {
             ("description", &["Senior Engineer"]),
         ]);
         assert!(detect_description_leak(&obj).is_none());
+    }
+
+    #[test]
+    fn test_detect_description_leak_explicit_format_is_high() {
+        let obj = make_obj(&[
+            ("sAMAccountName", &["svc"]),
+            ("description", &["password=Welcome2024!"]),
+        ]);
+        let leak = detect_description_leak(&obj).unwrap();
+        assert_eq!(leak.confidence, DescLeakConfidence::High);
+    }
+
+    #[test]
+    fn test_detect_description_leak_keyword_only_is_medium() {
+        let obj = make_obj(&[
+            ("sAMAccountName", &["svc"]),
+            ("description", &["Password123!"]),
+        ]);
+        let leak = detect_description_leak(&obj).unwrap();
+        assert_eq!(leak.confidence, DescLeakConfidence::Medium);
+    }
+
+    #[test]
+    fn test_detect_description_leak_key_only_is_low() {
+        let obj = make_obj(&[
+            ("sAMAccountName", &["pm"]),
+            ("description", &["key account manager"]),
+        ]);
+        let leak = detect_description_leak(&obj).unwrap();
+        assert_eq!(leak.confidence, DescLeakConfidence::Low);
+    }
+
+    #[test]
+    fn test_detect_description_leak_token_is_low() {
+        let obj = make_obj(&[
+            ("sAMAccountName", &["pm"]),
+            ("description", &["token migration notes"]),
+        ]);
+        let leak = detect_description_leak(&obj).unwrap();
+        assert_eq!(leak.confidence, DescLeakConfidence::Low);
     }
 }

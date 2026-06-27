@@ -8,7 +8,7 @@
 
 use crate::report::{Confidence, Finding, Severity};
 
-use super::parser::{detect_description_leak, LdapObject};
+use super::parser::{detect_description_leak, DescLeakConfidence, LdapObject};
 
 /// AS-REP roastable accounts (DONT_REQ_PREAUTH) → one aggregate finding.
 pub fn build_asrep_findings(asrep_objs: &[LdapObject], domain: &str) -> Vec<Finding> {
@@ -45,53 +45,92 @@ pub fn build_asrep_findings(asrep_objs: &[LdapObject], domain: &str) -> Vec<Find
     .with_mitre("T1558.004")]
 }
 
-/// SPN (Kerberoastable) accounts → one aggregate finding.
+/// SPN (Kerberoastable) accounts → one finding per account, severity based on enc type + admin status.
+///
+/// Severity ladder:
+/// - Critical: RC4-capable + adminCount=1 (privileged account, easily crackable)
+/// - High:     RC4-capable (enc_types == 0 or includes RC4 etype 0x4)
+/// - High:     AES-only + adminCount=1
+/// - Medium:   AES-only, normal account
 pub fn build_spn_findings(spn_objs: &[LdapObject], domain: &str) -> Vec<Finding> {
-    if spn_objs.is_empty() {
-        return vec![];
+    let mut findings = Vec::new();
+    for obj in spn_objs {
+        let name = match obj.get_first("sAMAccountName") {
+            Some(n) => n,
+            None => continue,
+        };
+        let spns = obj.get_all("servicePrincipalName");
+        if spns.is_empty() {
+            continue;
+        }
+        let enc_types = obj.get_u32("msDS-SupportedEncryptionTypes").unwrap_or(0);
+        let admin_count = obj.get_u32("adminCount").unwrap_or(0);
+
+        // RC4-HMAC etype = 0x4; enc_types==0 means "not configured" which allows RC4 by default
+        let rc4_capable = enc_types == 0 || (enc_types & 0x4 != 0);
+        let severity = match (rc4_capable, admin_count) {
+            (true, 1) => Severity::Critical,
+            (true, _) => Severity::High,
+            (false, 1) => Severity::High,
+            (false, _) => Severity::Medium,
+        };
+
+        let enc_description = if rc4_capable {
+            "RC4-HMAC capable (crackable offline with Hashcat mode 13100)"
+        } else {
+            "AES-only (RC4 disabled; harder to crack)"
+        };
+
+        findings.push(Finding::new(
+            format!("LDAP-SPN-{}", name.to_uppercase()),
+            "ldap",
+            severity,
+            format!("Kerberoastable service account: {}", name),
+            format!(
+                "Service account '{}' has SPN(s) registered and can be Kerberoasted. \
+                 Encryption: {}{}.",
+                name,
+                enc_description,
+                if admin_count == 1 { " — adminCount=1 indicates elevated privilege history" } else { "" }
+            ),
+            serde_json::json!({
+                "account": name,
+                "spns": spns,
+                "enc_types": enc_types,
+                "rc4_capable": rc4_capable,
+                "admin_count": admin_count,
+            }),
+            Some("Request TGS ticket (any domain user can do this) and crack offline with Hashcat mode 13100.".into()),
+        )
+        .with_llm_context(format!(
+            "Service account '{}' in domain '{}' has SPNs: {}. \
+             Any authenticated user can request a TGS ticket for this account. \
+             Enc type: {} (enc_types bitmask: {}). adminCount={}.",
+            name, domain, spns.join(", "), enc_description, enc_types, admin_count
+        ))
+        .with_remediation(vec![
+            "Migrate to Group Managed Service Accounts (gMSA) — AD auto-rotates the 240-char password",
+            "Set AES-only encryption: msDS-SupportedEncryptionTypes = 0x18 to disable RC4",
+            "For existing accounts, set a 25+ character random password and rotate every 90 days",
+            "Remove unnecessary SPNs with: setspn -D <SPN> <account>",
+        ])
+        .with_mitre("T1558.003"));
     }
-    let spns: Vec<serde_json::Value> = spn_objs
-        .iter()
-        .filter_map(|o| {
-            let name = o.get_first("sAMAccountName")?;
-            let spns = o.get_all("servicePrincipalName");
-            Some(serde_json::json!({ "account": name, "spns": spns }))
-        })
-        .collect();
-    vec![Finding::new(
-        "LDAP-SPN-ACCOUNTS",
-        "ldap",
-        Severity::Medium,
-        format!("{} Kerberoastable service account(s)", spn_objs.len()),
-        "Service accounts with SPNs can be targeted for Kerberoasting: \
-         any domain user can request a service ticket (TGS) for these accounts \
-         and crack them offline to recover the service account password.",
-        serde_json::json!({ "accounts": spns }),
-        Some("Service account passwords are often long-lived and weak. Crack with Hashcat mode 13100.".into()),
-    )
-    .with_llm_context(format!(
-        "{} service account(s) in domain '{}' have Service Principal Names (SPNs) registered. \
-         Any authenticated domain user can request a Kerberos service ticket (TGS) for these accounts. \
-         The encrypted ticket can be extracted and cracked offline (Hashcat mode 13100). \
-         Service accounts often have long-lived, weak passwords set years ago by sysadmins.",
-        spn_objs.len(), domain
-    ))
-    .with_remediation(vec![
-        "Implement Managed Service Accounts (MSA) or Group Managed Service Accounts (gMSA) — passwords are auto-rotated by AD",
-        "For existing service accounts, set passwords to 25+ character random strings and rotate them",
-        "Remove unnecessary SPNs from user accounts",
-        "Enable AES-only encryption on service accounts (disable RC4) to make cracking harder",
-    ])
-    .with_mitre("T1558.003")]
+    findings
 }
 
 /// Description-field credential leaks → one finding per matching account.
-/// Heuristic keyword match → Medium confidence.
+/// Confidence is set by the match tier: High for explicit formats, Medium for keywords, Low for ambiguous terms.
 pub fn build_description_leak_findings(desc_objs: &[LdapObject], domain: &str) -> Vec<Finding> {
     let mut findings = Vec::new();
     for obj in desc_objs {
-        if let Some(desc) = detect_description_leak(obj) {
+        if let Some(leak) = detect_description_leak(obj) {
             let name = obj.get_first("sAMAccountName").unwrap_or("?");
+            let confidence = match leak.confidence {
+                DescLeakConfidence::High => Confidence::High,
+                DescLeakConfidence::Medium => Confidence::Medium,
+                DescLeakConfidence::Low => Confidence::Low,
+            };
             findings.push(
                 Finding::new(
                     format!("LDAP-DESC-LEAK-{}", name.to_uppercase()),
@@ -99,14 +138,14 @@ pub fn build_description_leak_findings(desc_objs: &[LdapObject], domain: &str) -
                     Severity::High,
                     format!("Potential credential in description: {}", name),
                     format!("Account '{}' has a suspicious description that may contain a credential.", name),
-                    serde_json::json!({ "account": name, "dn": obj.dn, "description": desc }),
+                    serde_json::json!({ "account": name, "dn": obj.dn, "description": leak.description }),
                     Some("Verify the description manually. If it contains a password, update and clear the field immediately.".into()),
                 )
                 .with_llm_context(format!(
                     "Account '{}' in domain '{}' has a description field that appears to contain credential material: \"{}\". \
                      The description attribute is readable by all domain users by default. \
                      This is a common legacy pattern where admins stored passwords in AD for convenience.",
-                    name, domain, desc
+                    name, domain, leak.description
                 ))
                 .with_remediation(vec![
                     "Immediately clear the description field for this account",
@@ -114,7 +153,7 @@ pub fn build_description_leak_findings(desc_objs: &[LdapObject], domain: &str) -
                     "Audit all accounts for credential material in description, comment, and info attributes",
                     "Implement a policy prohibiting credentials in AD attribute fields",
                 ])
-                .with_confidence(Confidence::Medium),
+                .with_confidence(confidence),
             );
         }
     }
@@ -172,7 +211,8 @@ pub fn build_constrained_findings(const_deleg_objs: &[LdapObject], _domain: &str
     for obj in const_deleg_objs {
         let name = obj.get_first("sAMAccountName").unwrap_or("?");
         let targets = obj.get_all("msDS-AllowedToDelegateTo");
-        let t2a4d = obj.get_u32("userAccountControl").unwrap_or(0) & 0x100000 != 0;
+        // TRUSTED_TO_AUTH_FOR_DELEGATION = 0x1000000 (NOT 0x100000 which is NOT_DELEGATED)
+        let t2a4d = obj.get_u32("userAccountControl").unwrap_or(0) & 0x01000000 != 0;
         findings.push(
             Finding::new(
                 format!("LDAP-CONST-DELEG-{}", name.to_uppercase()),
