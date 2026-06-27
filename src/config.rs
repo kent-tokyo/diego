@@ -291,7 +291,7 @@ fn get_password_from_krb5_cache(username: &str, domain: &str) -> Option<String> 
     }
 }
 
-fn parse_modules(s: &str) -> Vec<ModuleKind> {
+pub fn parse_modules(s: &str) -> Vec<ModuleKind> {
     if s.eq_ignore_ascii_case("all") {
         return vec![ModuleKind::Ldap, ModuleKind::Kerberos, ModuleKind::Passive];
     }
