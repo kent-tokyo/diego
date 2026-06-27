@@ -25,6 +25,10 @@ pub struct LdapContext {
 pub struct SpnAccount {
     pub sam_name: String,
     pub spns: Vec<String>,
-    /// msDS-SupportedEncryptionTypes bitmask (0 = unknown/legacy = RC4 ok)
+    /// msDS-SupportedEncryptionTypes bitmask (0 = unknown/legacy = RC4 supported)
     pub supported_enc_types: u32,
+    /// pwdLastSet as Windows FILETIME (100-ns intervals since 1601-01-01); None if unset
+    pub pwd_last_set: Option<i64>,
+    /// adminCount=1 indicates the account was/is in a privileged group and has protected ACL
+    pub admin_count: u32,
 }

@@ -53,7 +53,41 @@ fn description_with_credential_keyword_is_medium_confidence() {
     let f = analyze::build_description_leak_findings(&objs, DOMAIN);
     assert_eq!(f.len(), 1, "credential-looking description must be flagged");
     assert_eq!(f[0].id, "LDAP-DESC-LEAK-HELPDESK");
-    assert_eq!(f[0].confidence, Confidence::Medium, "heuristic match → Medium confidence");
+    assert_eq!(f[0].confidence, Confidence::Medium, "keyword match without explicit format → Medium");
+}
+
+#[test]
+fn description_with_explicit_format_is_high_confidence() {
+    let objs = vec![obj(
+        "CN=svc,DC=corp,DC=local",
+        &[("sAMAccountName", &["svc"]), ("description", &["password=Welcome2024!"])],
+    )];
+    let f = analyze::build_description_leak_findings(&objs, DOMAIN);
+    assert_eq!(f.len(), 1);
+    assert_eq!(f[0].confidence, Confidence::High, "password= format → High confidence");
+}
+
+#[test]
+fn description_with_key_only_is_low_confidence() {
+    let objs = vec![obj(
+        "CN=pm,DC=corp,DC=local",
+        &[("sAMAccountName", &["pm"]), ("description", &["key account manager"])],
+    )];
+    let f = analyze::build_description_leak_findings(&objs, DOMAIN);
+    assert_eq!(f.len(), 1, "key-only descriptions should still produce a finding at Low confidence");
+    assert_eq!(f[0].confidence, Confidence::Low, "ambiguous term → Low confidence");
+}
+
+#[test]
+fn description_with_token_only_is_low_confidence() {
+    // False-positive regression: "token" alone is common in business language
+    let objs = vec![obj(
+        "CN=user,DC=corp,DC=local",
+        &[("sAMAccountName", &["user"]), ("description", &["token migration project"])],
+    )];
+    let f = analyze::build_description_leak_findings(&objs, DOMAIN);
+    assert_eq!(f.len(), 1);
+    assert_eq!(f[0].confidence, Confidence::Low);
 }
 
 #[test]
@@ -79,16 +113,49 @@ fn unconstrained_delegation_is_critical() {
 }
 
 #[test]
-fn spn_accounts_are_kerberoastable_medium() {
+fn spn_rc4_capable_account_is_high() {
+    // enc_types == 0 means not configured → RC4 allowed by default → High
     let objs = vec![obj(
         "CN=mssql,DC=corp,DC=local",
         &[("sAMAccountName", &["mssql"]), ("servicePrincipalName", &["MSSQLSvc/db01"])],
     )];
     let f = analyze::build_spn_findings(&objs, DOMAIN);
     assert_eq!(f.len(), 1);
-    assert_eq!(f[0].id, "LDAP-SPN-ACCOUNTS");
-    assert_eq!(f[0].severity, Severity::Medium);
+    assert_eq!(f[0].id, "LDAP-SPN-MSSQL");
+    assert_eq!(f[0].severity, Severity::High, "RC4-capable (enc_types=0) → High");
     assert_eq!(f[0].mitre_id.as_deref(), Some("T1558.003"));
+}
+
+#[test]
+fn spn_rc4_capable_admin_is_critical() {
+    // adminCount=1 + RC4 capable → Critical
+    let objs = vec![obj(
+        "CN=svc_da,DC=corp,DC=local",
+        &[
+            ("sAMAccountName", &["svc_da"]),
+            ("servicePrincipalName", &["HTTP/app"]),
+            ("adminCount", &["1"]),
+        ],
+    )];
+    let f = analyze::build_spn_findings(&objs, DOMAIN);
+    assert_eq!(f.len(), 1);
+    assert_eq!(f[0].severity, Severity::Critical, "RC4 + adminCount=1 → Critical");
+}
+
+#[test]
+fn spn_aes_only_account_is_medium() {
+    // enc_types = 0x18 (AES128 + AES256), no RC4 → Medium
+    let objs = vec![obj(
+        "CN=svc_aes,DC=corp,DC=local",
+        &[
+            ("sAMAccountName", &["svc_aes"]),
+            ("servicePrincipalName", &["HTTP/aes-app"]),
+            ("msDS-SupportedEncryptionTypes", &["24"]), // 0x18 = AES128|AES256
+        ],
+    )];
+    let f = analyze::build_spn_findings(&objs, DOMAIN);
+    assert_eq!(f.len(), 1);
+    assert_eq!(f[0].severity, Severity::Medium, "AES-only → Medium");
 }
 
 #[test]
@@ -134,6 +201,54 @@ fn adequate_password_policy_is_info() {
     )];
     let f = analyze::build_password_policy_findings(&policy, DOMAIN);
     assert_eq!(f[0].severity, Severity::Info);
+}
+
+#[test]
+fn constrained_delegation_with_t2a4d_flag_is_detected() {
+    // UAC 0x1000000 = 16777216 = TRUSTED_TO_AUTH_FOR_DELEGATION (Protocol Transition / T2A4D)
+    let objs = vec![obj(
+        "CN=svc_t2a4d,DC=corp,DC=local",
+        &[
+            ("sAMAccountName", &["svc_t2a4d"]),
+            ("userAccountControl", &["16777216"]),
+            ("msDS-AllowedToDelegateTo", &["ldap/dc01.corp.local"]),
+        ],
+    )];
+    let f = analyze::build_constrained_findings(&objs, DOMAIN);
+    assert_eq!(f.len(), 1);
+    assert!(
+        f[0].description.contains("Protocol Transition"),
+        "UAC=16777216 must trigger T2A4D label, got: {}",
+        f[0].description
+    );
+    assert!(
+        f[0].evidence["protocol_transition_t2a4d"].as_bool().unwrap_or(false),
+        "evidence.protocol_transition_t2a4d must be true"
+    );
+}
+
+#[test]
+fn constrained_delegation_not_delegated_bit_is_not_t2a4d() {
+    // UAC 0x100000 = 1048576 = NOT_DELEGATED — must NOT be treated as T2A4D
+    let objs = vec![obj(
+        "CN=svc_nodele,DC=corp,DC=local",
+        &[
+            ("sAMAccountName", &["svc_nodele"]),
+            ("userAccountControl", &["1048576"]),
+            ("msDS-AllowedToDelegateTo", &["http/web01.corp.local"]),
+        ],
+    )];
+    let f = analyze::build_constrained_findings(&objs, DOMAIN);
+    assert_eq!(f.len(), 1);
+    assert!(
+        !f[0].description.contains("Protocol Transition"),
+        "UAC=1048576 (NOT_DELEGATED) must NOT trigger T2A4D label, got: {}",
+        f[0].description
+    );
+    assert!(
+        !f[0].evidence["protocol_transition_t2a4d"].as_bool().unwrap_or(true),
+        "evidence.protocol_transition_t2a4d must be false for NOT_DELEGATED"
+    );
 }
 
 #[test]

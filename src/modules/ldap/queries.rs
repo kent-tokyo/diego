@@ -3,24 +3,26 @@ use std::time::Duration;
 use ldap3::{Ldap, Scope, SearchEntry};
 use rand::Rng;
 
+use super::filters::ASREP_CANDIDATES;
 use super::parser::LdapObject;
 
-/// LDAP query 1: Find accounts with DONT_REQ_PREAUTH (AS-REP Roasting targets).
-/// userAccountControl bit 22 (0x400000 = 4194304)
+/// LDAP query 1: Find enabled accounts with DONT_REQ_PREAUTH (AS-REP Roasting targets).
+/// Excludes disabled accounts (ACCOUNTDISABLE = 0x2) to avoid false positives.
 pub async fn query_asrep_candidates(ldap: &mut Ldap, base_dn: &str) -> anyhow::Result<Vec<LdapObject>> {
-    let filter = "(userAccountControl:1.2.840.113556.1.4.803:=4194304)";
     let attrs = vec!["sAMAccountName", "userAccountControl", "distinguishedName"];
-    search(ldap, base_dn, filter, &attrs).await
+    search(ldap, base_dn, ASREP_CANDIDATES, &attrs).await
 }
 
 /// LDAP query 2: Find service accounts with SPNs (Kerberoasting targets).
-/// Excludes computer accounts.
+/// Excludes computer accounts and disabled accounts.
 pub async fn query_spn_accounts(ldap: &mut Ldap, base_dn: &str) -> anyhow::Result<Vec<LdapObject>> {
     let filter = "(&(servicePrincipalName=*)(!(objectClass=computer))(!(userAccountControl:1.2.840.113556.1.4.803:=2)))";
     let attrs = vec![
         "sAMAccountName",
         "servicePrincipalName",
         "msDS-SupportedEncryptionTypes",
+        "adminCount",
+        "pwdLastSet",
         "distinguishedName",
         "memberOf",
     ];
@@ -72,10 +74,10 @@ pub async fn query_password_policy(ldap: &mut Ldap, base_dn: &str) -> anyhow::Re
 }
 
 /// LDAP query 6: Find accounts/computers with Constrained Delegation configured.
-/// Targets: accounts with msDS-AllowedToDelegateTo set OR UAC TRUSTED_TO_AUTH_FOR_DELEGATION (0x100000).
+/// Targets: accounts with msDS-AllowedToDelegateTo set OR UAC TRUSTED_TO_AUTH_FOR_DELEGATION (0x1000000 = 16777216).
 pub async fn query_constrained_delegation(ldap: &mut Ldap, base_dn: &str) -> anyhow::Result<Vec<LdapObject>> {
-    // OR filter: has delegation target list OR has T2A4D flag
-    let filter = "(|(msDS-AllowedToDelegateTo=*)(userAccountControl:1.2.840.113556.1.4.803:=1048576))";
+    // OR filter: has delegation target list OR has T2A4D flag (0x1000000, NOT 0x100000 which is NOT_DELEGATED)
+    let filter = "(|(msDS-AllowedToDelegateTo=*)(userAccountControl:1.2.840.113556.1.4.803:=16777216))";
     let attrs = vec![
         "sAMAccountName",
         "msDS-AllowedToDelegateTo",
@@ -246,11 +248,12 @@ mod tests {
 
     #[test]
     fn test_constrained_delegation_filter() {
-        // Verify filter for msDS-AllowedToDelegateTo OR TRUSTED_TO_AUTH_FOR_DELEGATION (bit 20 = 0x100000)
-        let filter = "(|(msDS-AllowedToDelegateTo=*)(userAccountControl:1.2.840.113556.1.4.803:=1048576))";
+        // TRUSTED_TO_AUTH_FOR_DELEGATION = 0x1000000 = 16777216 (NOT 0x100000/1048576 = NOT_DELEGATED)
+        let filter = "(|(msDS-AllowedToDelegateTo=*)(userAccountControl:1.2.840.113556.1.4.803:=16777216))";
         assert!(filter.contains("|")); // OR operator
         assert!(filter.contains("msDS-AllowedToDelegateTo=*"));
-        assert!(filter.contains("1048576")); // 0x100000
+        assert!(filter.contains("16777216")); // 0x1000000 = T2A4D
+        assert!(!filter.contains("1048576")); // must NOT use NOT_DELEGATED bit
     }
 
     #[test]
@@ -445,11 +448,12 @@ mod tests {
 
     #[test]
     fn test_uac_bit_values() {
-        // Verify userAccountControl bit values are correct
-        assert_eq!(4194304, 0x400000); // DONT_REQ_PREAUTH (bit 22)
-        assert_eq!(524288, 0x80000);   // TRUSTED_FOR_DELEGATION (bit 19)
-        assert_eq!(1048576, 0x100000); // TRUSTED_TO_AUTH_FOR_DELEGATION (bit 20)
-        assert_eq!(2, 0x2);            // ACCOUNT_DISABLED
+        // Verify userAccountControl bit values per Microsoft docs
+        assert_eq!(4194304, 0x400000);  // DONT_REQ_PREAUTH (bit 22)
+        assert_eq!(524288, 0x80000);    // TRUSTED_FOR_DELEGATION (bit 19, unconstrained)
+        assert_eq!(16777216, 0x1000000); // TRUSTED_TO_AUTH_FOR_DELEGATION (bit 24, T2A4D / Protocol Transition)
+        assert_eq!(1048576, 0x100000);  // NOT_DELEGATED (bit 20) — NOT the same as T2A4D
+        assert_eq!(2, 0x2);             // ACCOUNT_DISABLED
     }
 
     #[test]
