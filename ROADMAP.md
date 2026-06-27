@@ -39,11 +39,15 @@ Priority is bug fixes, issue triage, and real-user feedback over new features.
 
 ## Future design (not yet — intentionally deferred)
 
-- **Safe mode (`--mode audit` / `--export-hashes`).** Make the *defensive*
-  output the default: `--mode audit` reports findings without emitting
-  crackable hash material, and offensive output is gated behind an explicit
-  `--mode full` + `--export-hashes` opt-in. **Designed, not implemented** — see
-  [docs/DESIGN-safe-mode.md](docs/DESIGN-safe-mode.md).
+- ✅ **Safe mode (`--mode audit` / `--export-hashes`).** Implemented in 0.2.x:
+  audit mode (the default) redacts crackable hash material from all report
+  formats; hash output requires explicit `--mode full --export-hashes`. MCP tool
+  responses are always audit-mode. See [docs/DESIGN-safe-mode.md](docs/DESIGN-safe-mode.md).
+- **GSSAPI / Kerberos bind.** `~/.diego/keytab` and TGT cache detection are
+  implemented (config.rs), but the LDAP layer still uses simple bind. Native
+  GSSAPI auth (via ldap3 SASL or libgssapi-krb5 bindings) is deferred — it
+  requires a cross-platform native-lib dependency that breaks the static musl
+  build. Target: 0.3.x once a rustls-compatible SASL path is available.
 - **Plugin architecture.** Refactor detectors behind a `trait Detector` and a
   `detectors/` directory once the detector count grows (it is ~13 today; this is
   premature now). Lowers the barrier for external contributors.

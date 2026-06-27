@@ -1,8 +1,9 @@
 # Design sketch: safe mode (`--mode audit` / `--export-hashes`)
 
-> **Status: design only — not implemented.** This records the intended design so
-> it can be reviewed before any code is written. Tracked in
-> [ROADMAP.md](../ROADMAP.md).
+> **Status: implemented in 0.2.x.** `--mode audit` (default) redacts
+> crackable hashes from all report formats; `--mode full --export-hashes`
+> enables them. MCP tool responses are always audit-mode. See `src/report/mod.rs`
+> (`redact_evidence`) and `src/config.rs` (`RunMode`). Original design below.
 
 ## Motivation
 

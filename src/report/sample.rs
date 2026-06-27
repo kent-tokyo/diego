@@ -26,7 +26,7 @@ pub fn sample_report() -> Report {
             Severity::Critical,
             "AS-REP Roastable Account",
             "Account 'svc_backup' has Kerberos pre-authentication disabled, allowing offline cracking of its AS-REP hash.",
-            serde_json::json!({ "account": "svc_backup", "hash": "$krb5asrep$23$svc_backup@CORP.LOCAL:..." }),
+            serde_json::json!({ "account": "svc_backup", "hashcat_hash": "$krb5asrep$23$svc_backup@CORP.LOCAL:...", "hashcat_mode": 18200 }),
             Some("AS-REP roast svc_backup, then crack offline to gain initial credentials.".into()),
         )
         .with_mitre("T1558.004")

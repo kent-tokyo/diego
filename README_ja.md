@@ -73,22 +73,9 @@ diego --mcp
    diego --dc 10.0.0.1 --domain corp.local --username jdoe
    ```
 
-2. **Kerberos keytab** — `~/.diego/keytab` (パスワード不要)
-   ```bash
-   # keytab をセットアップ (kinit または ktutil が必要)
-   ktutil: addent -password -p user@CORP.LOCAL -k 1 -e aes256-cts-hmac-sha1-96
-   ktutil: write_kt ~/.diego/keytab
-   
-   # その後、パスワードなしで実行
-   diego --dc 10.0.0.1 --domain corp.local --username jdoe
-   ```
+2. **Kerberos keytab 検出** — `~/.diego/keytab` の存在を検出してログに記録し、対話的プロンプトへフォールバック（GSSAPI バインドは未実装、将来のリリースで対応予定）
 
-3. **Kerberos TGT キャッシュ** — `KRB5CCNAME` 環境変数または `/tmp/krb5cc_*` (パスワード不要)
-   ```bash
-   # すでに Kerberos レルムにログインしている場合：
-   klist  # キャッシュされたチケットを確認
-   diego --dc 10.0.0.1 --domain corp.local --username jdoe
-   ```
+3. **Kerberos TGT キャッシュ検出** — `KRB5CCNAME` / `/tmp/krb5cc_*` の存在を検出してログに記録し、対話的プロンプトへフォールバック（GSSAPI バインドは未実装、将来のリリースで対応予定）
 
 4. **対話的プロンプト** — 上記が利用不可の場合のフォールバック
    ```

@@ -25,7 +25,8 @@
       "description": "Account 'svc_backup' has Kerberos pre-authentication disabled, allowing offline cracking of its AS-REP hash.",
       "evidence": {
         "account": "svc_backup",
-        "hash": "$krb5asrep$23$svc_backup@CORP.LOCAL:..."
+        "hashcat_hash": "$krb5asrep$23$svc_backup@CORP.LOCAL:...",
+        "hashcat_mode": 18200
       },
       "attack_path_hint": "AS-REP roast svc_backup, then crack offline to gain initial credentials.",
       "timestamp": "<normalized>",

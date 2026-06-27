@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::config::{Config, ReportFormat};
+use crate::config::{Config, ReportFormat, RunMode};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "UPPERCASE")]
@@ -183,7 +183,7 @@ pub struct AiAnalysis {
 
 // ─── Report ───────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Report {
     pub tool: String,
     pub version: String,
@@ -199,7 +199,7 @@ pub struct Report {
     pub diff: Option<diff::ReportDiff>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Summary {
     pub critical: usize,
     pub high: usize,
@@ -248,10 +248,23 @@ impl Report {
     }
 
     pub async fn write(&self, config: &Arc<Config>) -> anyhow::Result<()> {
-        let content = match config.format {
-            ReportFormat::Json => json::generate(self)?,
-            ReportFormat::Markdown => markdown::generate(self),
-            ReportFormat::Html => html::generate(self),
+        let emit_hashes = config.mode == RunMode::Full && config.export_hashes;
+        let content = if emit_hashes {
+            match config.format {
+                ReportFormat::Json => json::generate(self)?,
+                ReportFormat::Markdown => markdown::generate(self),
+                ReportFormat::Html => html::generate(self),
+            }
+        } else {
+            let mut redacted = self.clone();
+            for f in &mut redacted.findings {
+                redact_evidence(&mut f.evidence);
+            }
+            match config.format {
+                ReportFormat::Json => json::generate(&redacted)?,
+                ReportFormat::Markdown => markdown::generate(&redacted),
+                ReportFormat::Html => html::generate(&redacted),
+            }
         };
 
         match &config.output {
@@ -265,6 +278,35 @@ impl Report {
     }
 }
 
+const REDACTED: &str = "[REDACTED — use --mode full --export-hashes]";
+
+/// Recursively replace sensitive evidence keys with a redaction marker.
+///
+/// Denylist keys:
+/// - `hashcat_hash` — AS-REP / TGS-REP crackable hashes from the Kerberos module
+/// - `hash` — legacy key used in sample data (normalised to hashcat_hash in future)
+/// - `detail` — cleartext capture credential strings (generic name but only used in
+///   passive/cleartext findings where it holds captured FTP/HTTP passwords)
+pub fn redact_evidence(val: &mut serde_json::Value) {
+    match val {
+        serde_json::Value::Object(map) => {
+            for (key, v) in map.iter_mut() {
+                if matches!(key.as_str(), "hashcat_hash" | "hash" | "detail") {
+                    *v = serde_json::Value::String(REDACTED.into());
+                } else {
+                    redact_evidence(v);
+                }
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for v in arr.iter_mut() {
+                redact_evidence(v);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Helper to build a ScanContext from config + measured duration.
 pub fn make_scan_context(config: &Config, modules_run: Vec<String>, start: Instant) -> ScanContext {
     ScanContext {
@@ -274,5 +316,57 @@ pub fn make_scan_context(config: &Config, modules_run: Vec<String>, start: Insta
         privilege_level: "standard_user".into(),
         modules_run,
         duration_secs: start.elapsed().as_secs(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fake_asrep_finding() -> Finding {
+        Finding::new(
+            "KRB-ASREP-test",
+            "kerberos",
+            Severity::Critical,
+            "AS-REP Roastable Account",
+            "test",
+            serde_json::json!({
+                "account": "svc_test",
+                "hashcat_hash": "$krb5asrep$23$svc_test@TEST.LOCAL:deadbeef",
+                "hashcat_mode": 18200,
+            }),
+            None,
+        )
+    }
+
+    #[test]
+    fn redact_evidence_removes_hash_in_audit_mode() {
+        let mut f = fake_asrep_finding();
+        redact_evidence(&mut f.evidence);
+        let serialized = serde_json::to_string(&f.evidence).unwrap();
+        assert!(!serialized.contains("deadbeef"), "hash must not appear in audit output");
+        assert!(serialized.contains(REDACTED), "redaction marker must be present");
+    }
+
+    #[test]
+    fn redact_evidence_removes_detail_in_nested_capture() {
+        let mut val = serde_json::json!({
+            "captures": [
+                { "protocol": "FTP", "src": "1.2.3.4", "detail": "PASS secret123" }
+            ]
+        });
+        redact_evidence(&mut val);
+        let s = serde_json::to_string(&val).unwrap();
+        assert!(!s.contains("secret123"));
+        assert!(s.contains(REDACTED));
+    }
+
+    #[test]
+    fn redact_evidence_preserves_non_sensitive_keys() {
+        let mut val = serde_json::json!({ "account": "jdoe", "lockout_threshold": 10 });
+        redact_evidence(&mut val);
+        let s = serde_json::to_string(&val).unwrap();
+        assert!(s.contains("jdoe"));
+        assert!(s.contains("10"));
     }
 }

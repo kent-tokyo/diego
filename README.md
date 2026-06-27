@@ -73,22 +73,9 @@ When password is not provided with `--password`, diego tries these methods in or
    diego --dc 10.0.0.1 --domain corp.local --username jdoe
    ```
 
-2. **Kerberos keytab** — `~/.diego/keytab` (no password needed)
-   ```bash
-   # Set up keytab (requires kinit or ktutil)
-   ktutil: addent -password -p user@CORP.LOCAL -k 1 -e aes256-cts-hmac-sha1-96
-   ktutil: write_kt ~/.diego/keytab
-   
-   # Then run without password
-   diego --dc 10.0.0.1 --domain corp.local --username jdoe
-   ```
+2. **Kerberos keytab detected** — `~/.diego/keytab` presence is detected and logged, then falls through to interactive prompt (GSSAPI bind not yet implemented; planned for a future release)
 
-3. **Kerberos TGT cache** — `KRB5CCNAME` env var or `/tmp/krb5cc_*` (no password needed)
-   ```bash
-   # If already logged into Kerberos realm:
-   klist  # Check cached ticket
-   diego --dc 10.0.0.1 --domain corp.local --username jdoe
-   ```
+3. **Kerberos TGT cache detected** — `KRB5CCNAME` / `/tmp/krb5cc_*` presence is detected and logged, then falls through to interactive prompt (GSSAPI bind not yet implemented; planned for a future release)
 
 4. **Interactive prompt** — Fallback if none above are available
    ```

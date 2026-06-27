@@ -73,22 +73,9 @@ diego --mcp
    diego --dc 10.0.0.1 --domain corp.local --username jdoe
    ```
 
-2. **Kerberos keytab** — `~/.diego/keytab`（不需要密码）
-   ```bash
-   # 设置 keytab（需要 kinit 或 ktutil）
-   ktutil: addent -password -p user@CORP.LOCAL -k 1 -e aes256-cts-hmac-sha1-96
-   ktutil: write_kt ~/.diego/keytab
-   
-   # 然后无密码运行
-   diego --dc 10.0.0.1 --domain corp.local --username jdoe
-   ```
+2. **检测到 Kerberos keytab** — 检测并记录 `~/.diego/keytab` 的存在，然后回退到交互式提示（GSSAPI 绑定尚未实现，计划在未来版本中支持）
 
-3. **Kerberos TGT 缓存** — `KRB5CCNAME` 环境变量或 `/tmp/krb5cc_*`（不需要密码）
-   ```bash
-   # 如果已登录到 Kerberos 领域：
-   klist  # 检查缓存的票证
-   diego --dc 10.0.0.1 --domain corp.local --username jdoe
-   ```
+3. **检测到 Kerberos TGT 缓存** — 检测并记录 `KRB5CCNAME` / `/tmp/krb5cc_*` 的存在，然后回退到交互式提示（GSSAPI 绑定尚未实现，计划在未来版本中支持）
 
 4. **交互式提示** — 如果上述都不可用，则降级
    ```

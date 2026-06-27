@@ -11,7 +11,6 @@ use serde_json::Value;
 
 use crate::config::Config;
 use crate::modules::kerberos::asreq::{build_asrep_roast_request, parse_kdc_response, KdcResponse};
-use crate::modules::kerberos::hashcat::format_asrep_18200;
 use crate::modules::kerberos::mod_send_kerberos_tcp;
 use crate::modules::ldap::parser::extract_spn_accounts;
 use crate::modules::ldap::queries::{
@@ -344,12 +343,11 @@ async fn run_asrep_roasting(args: &Value) -> anyhow::Result<Value> {
         match mod_send_kerberos_tcp(&dc_addr, &req, timeout).await {
             Ok(raw) => {
                 if let Ok(KdcResponse::AsRep(enc)) = parse_kdc_response(&raw) {
-                    let hash = format_asrep_18200(enc.etype, username, &realm, &enc.cipher);
+                    // ponytail: hash omitted — MCP is always audit mode; use CLI --mode full --export-hashes for crack material
                     hashes.push(serde_json::json!({
                         "username": username,
                         "etype": enc.etype,
-                        "hashcat_hash": hash,
-                        "hashcat_mode": 18200,
+                        "vulnerable": true,
                     }));
                 }
             }
@@ -397,6 +395,7 @@ async fn run_kerberoasting(args: &Value) -> anyhow::Result<Value> {
     let kerb_mod = crate::modules::kerberos::KerberosModule::new(ctx);
     let findings = kerb_mod.run(Arc::new(config)).await.unwrap_or_default();
 
+    // ponytail: hash omitted — MCP is always audit mode; use CLI --mode full --export-hashes for crack material
     let hashes: Vec<Value> = findings.iter()
         .filter(|f| f.id.starts_with("KERB-TGS-"))
         .map(|f| serde_json::json!({
@@ -404,8 +403,7 @@ async fn run_kerberoasting(args: &Value) -> anyhow::Result<Value> {
             "account": f.evidence.get("sam_name"),
             "spn": f.evidence.get("spn"),
             "etype": f.evidence.get("etype"),
-            "hashcat_hash": f.evidence.get("hashcat_hash"),
-            "hashcat_mode": 13100,
+            "vulnerable": true,
         }))
         .collect();
 
@@ -576,8 +574,15 @@ async fn full_scan(args: &Value) -> anyhow::Result<Value> {
         "total":    all.len(),
     });
 
+    // Redact hash material — MCP is always audit mode.
+    let redacted: Vec<Finding> = all.iter().map(|f| {
+        let mut f = (*f).clone();
+        crate::report::redact_evidence(&mut f.evidence);
+        f
+    }).collect();
+
     Ok(serde_json::json!({
-        "findings": all,
+        "findings": redacted,
         "summary": summary,
     }))
 }
@@ -614,6 +619,8 @@ fn build_minimal_config(
         ai_analyze: false,
         chat: false,
         ai_model: crate::ai::claude::DEFAULT_MODEL.to_string(),
+        mode: crate::config::RunMode::Audit,
+        export_hashes: false,
         mcp: false,
     })
 }
