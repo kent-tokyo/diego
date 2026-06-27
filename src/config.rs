@@ -66,6 +66,16 @@ pub struct Cli {
     #[arg(long, default_value = crate::ai::claude::DEFAULT_MODEL)]
     pub ai_model: String,
 
+    // ── Safe mode ─────────────────────────────────────────────────────────────
+
+    /// Run mode: audit (default) redacts crackable hashes; full keeps raw evidence
+    #[arg(long, value_enum, default_value = "audit")]
+    pub mode: RunMode,
+
+    /// Include crackable hash material in the report (requires --mode full)
+    #[arg(long)]
+    pub export_hashes: bool,
+
     // ── MCP mode ─────────────────────────────────────────────────────────────
 
     /// Run as an MCP (Model Context Protocol) server over stdio
@@ -75,6 +85,13 @@ pub struct Cli {
     /// Write a Claude Desktop MCP configuration snippet to stdout and exit
     #[arg(long)]
     pub mcp_init: bool,
+}
+
+/// Output mode: audit (default) hides crackable hash material; full+export-hashes enables it.
+#[derive(Clone, Debug, PartialEq, clap::ValueEnum)]
+pub enum RunMode {
+    Audit,
+    Full,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -108,6 +125,9 @@ pub struct Config {
     pub ai_analyze: bool,
     pub chat: bool,
     pub ai_model: String,
+    // Safe mode
+    pub mode: RunMode,
+    pub export_hashes: bool,
     // MCP
     pub mcp: bool,
 }
@@ -156,6 +176,10 @@ impl Config {
             Zeroizing::new(input.trim().to_string())
         };
 
+        if cli.export_hashes && cli.mode != RunMode::Full {
+            eprintln!("[!] --export-hashes has no effect without --mode full");
+        }
+
         Ok(Config {
             dc_ip,
             domain,
@@ -171,6 +195,8 @@ impl Config {
             ai_analyze: cli.ai_analyze || cli.chat,
             chat: cli.chat,
             ai_model: cli.ai_model,
+            mode: cli.mode,
+            export_hashes: cli.export_hashes,
             mcp: cli.mcp,
         })
     }
@@ -196,8 +222,8 @@ pub fn domain_to_base_dn(domain: &str) -> String {
         .join(",")
 }
 
-/// Attempts to load authentication from keytab file at ~/.diego/keytab
-/// Returns a marker string "KERBEROS" to signal keytab-based auth
+/// Detects keytab presence and logs a notice, but does NOT perform GSSAPI auth.
+/// ponytail: stub — LDAP still uses simple bind; GSSAPI/SASL is a future addition.
 fn get_password_from_keytab(username: &str, domain: &str) -> Option<String> {
     let keytab_path = if let Ok(home) = std::env::var("HOME") {
         PathBuf::from(format!("{}/.diego/keytab", home))
@@ -215,8 +241,8 @@ fn get_password_from_keytab(username: &str, domain: &str) -> Option<String> {
     }
 }
 
-/// Attempts to detect Kerberos TGT in system cache (/tmp/krb5cc_* on Linux, LSA on Windows)
-/// Returns a marker string "KERBEROS" to signal cache-based auth
+/// Detects Kerberos TGT cache presence and logs a notice, but does NOT extract tickets.
+/// ponytail: stub — LDAP still uses simple bind; GSSAPI/SASL is a future addition.
 fn get_password_from_krb5_cache(username: &str, domain: &str) -> Option<String> {
     #[cfg(target_os = "linux")]
     {
