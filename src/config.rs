@@ -80,6 +80,14 @@ pub struct Cli {
     #[arg(long, value_name = "FINDING_ID")]
     pub explain: Option<String>,
 
+    /// Emit the bounded finding exposure graph as JSON after the scan
+    #[arg(long)]
+    pub exposure_graph: bool,
+
+    /// Simulate remediation by comma-separated finding IDs (no directory changes)
+    #[arg(long, value_name = "FINDING_IDS")]
+    pub simulate_remediation: Option<String>,
+
     // ── MCP mode ─────────────────────────────────────────────────────────────
 
     /// Run as an MCP (Model Context Protocol) server over stdio
@@ -133,6 +141,8 @@ pub struct Config {
     pub mode: RunMode,
     pub export_hashes: bool,
     pub explain: Option<String>,
+    pub exposure_graph: bool,
+    pub simulate_remediation: Option<String>,
     // MCP
     pub mcp: bool,
 }
@@ -203,6 +213,8 @@ impl Config {
             mode: cli.mode,
             export_hashes: cli.export_hashes,
             explain: cli.explain,
+            exposure_graph: cli.exposure_graph,
+            simulate_remediation: cli.simulate_remediation,
             mcp: cli.mcp,
         })
     }

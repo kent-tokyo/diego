@@ -622,6 +622,8 @@ fn build_minimal_config(
         mode: crate::config::RunMode::Audit,
         export_hashes: false,
         explain: None,
+        exposure_graph: false,
+        simulate_remediation: None,
         mcp: false,
     })
 }

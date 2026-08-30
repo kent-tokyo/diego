@@ -121,6 +121,8 @@ diego [OPTIONS]
 | `--format <FORMAT>` | `json` | Output format: `json`, `markdown`, or `html` |
 | `--baseline <PATH>` | — | Prior diego JSON report to diff against (shows new / resolved / severity-changed findings) |
 | `--explain <FINDING_ID>` | — | Explain a finding's detector, evidence provenance, confidence, and remediation |
+| `--exposure-graph` | — | Emit a bounded, provenance-preserving exposure graph as JSON |
+| `--simulate-remediation <FINDING_IDS>` | — | Simulate removing comma-separated findings without changing the directory |
 | `--timeout <TIMEOUT>` | `10` | Per-query timeout in seconds |
 | `--interface <INTERFACE>` | Auto-detect | Network interface for passive listening |
 | `--ai-model <AI_MODEL>` | `claude-sonnet-4-6` | Claude model for analysis |
@@ -319,6 +321,11 @@ diego ... --format json --output baseline.json
 
 # Later scan → diff against the baseline
 diego ... --format html --baseline baseline.json --output report.html
+
+# Explain a finding or inspect the bounded exposure graph
+diego ... --explain LDAP-RBCD-APP01
+diego ... --exposure-graph
+diego ... --simulate-remediation LDAP-RBCD-APP01,LDAP-SPN-SVC_WEB
 ```
 
 The report gains a **Baseline Diff** section: 🆕 new, ✅ resolved, and ⚠️ severity-changed findings, plus an unchanged count. Works with `json`, `markdown`, and `html` output.

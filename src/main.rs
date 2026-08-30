@@ -79,6 +79,17 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    if config.exposure_graph {
+        println!("{}", serde_json::to_string_pretty(&report::exposure::build(&report))?);
+        return Ok(());
+    }
+
+    if let Some(ids) = &config.simulate_remediation {
+        let ids: Vec<String> = ids.split(',').map(str::trim).filter(|id| !id.is_empty()).map(String::from).collect();
+        println!("{}", serde_json::to_string_pretty(&report::exposure::simulate(&report, &ids))?);
+        return Ok(());
+    }
+
     // ── AI analysis ───────────────────────────────────────────────────────────
     if config.ai_analyze {
         match ai::ClaudeClient::new(None, Some(config.ai_model.clone())) {

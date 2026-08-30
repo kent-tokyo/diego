@@ -1,154 +1,153 @@
-# diego Roadmap
+# diego Roadmap — PingCastle超越計画
 
-This roadmap is organized around a single product thesis: diego should be the
-most trustworthy way to measure the **read-only, standard-user blast radius**
-of an Active Directory environment. It is not a promise of invisibility and it
-is not an exploitation roadmap. Every phase is for authorised defensive
-assessment, with explicit evidence, safety controls, and reproducible results.
+## 目的
 
-## Competitive strategy
+diegoの目標は、PingCastleの代替を名乗ることではなく、標準ドメインユーザー
+権限だけで、より正確に、より再現可能に、修正まで追跡できるActive Directory
+診断を提供することです。
 
-The market already has strong point solutions:
+PingCastleはAD Health Check、ADマップ、複数レポートの統合、成熟度・履歴
+ダッシュボード、定期収集、API連携まで提供しています。そのためRust製の
+単一バイナリだけでは優位性になりません。本計画では、検出、証拠、規模、
+修正確認、統合の5領域で優位性を測定します。
 
-| Alternative | Strength to respect | diego's target advantage |
-|---|---|---|
-| PingCastle | Broad AD health checks, maturity reporting, domain consolidation | A single Rust binary, stronger evidence lineage, safe-mode defaults, and deterministic machine-readable output |
-| BloodHound CE/Enterprise | Identity graph and attack-path exploration | A smaller, read-only exposure assessment that can run from an ordinary endpoint and explain findings without pretending to be a complete graph |
-| Purple Knight and similar auditors | Curated AD security checks and operator-friendly findings | Cross-platform offline operation, privacy-preserving reports, and tests that prove each detector against fixtures |
-| Continuous monitoring platforms | Ongoing change detection and enterprise workflow | A low-friction baseline and verification agent that can feed existing SIEM/ticketing workflows without requiring a SaaS control plane |
+## 勝ち筋と評価指標
 
-The advantage must be demonstrated, not asserted. The primary scorecard is:
+| 領域 | diegoの目標 |
+|---|---|
+| 検出 | 重要な標準ユーザー可視リスクのカバレッジを同等以上にする |
+| 正確性 | 根拠属性、信頼度、未取得データ、誤検知条件を必ず示す |
+| 運用 | 複数ドメイン・複数フォレスト・オフライン環境を少ない設定で扱う |
+| 改善 | スコアだけでなく、担当、期限、修正確認、再発を追跡する |
+| 統合 | JSON Schema、SARIF、Webhook、SIEM、CI、MCPを安定提供する |
+| 安全性 | 読み取り専用、監査モード、最小データ、暗号化、収集証跡を守る |
 
-- time from download to first useful report;
-- coverage of high-impact, standard-user-visible misconfigurations;
-- finding precision, confidence, and evidence completeness;
-- peak memory, query count, and network footprint in a published lab;
-- percentage of remediations verified by a later baseline;
-- zero secret leakage in audit-mode output.
+各リリースで、実行時間、ピークRSS、LDAP/Kerberosクエリ数、検出率、
+誤検知率、初回レポートまでの時間、修正確認率、監査モードの秘密情報漏えい
+ゼロを公開します。
 
-## Phase 0 — Trust, scope, and release gate (v0.4.x)
+## Phase 0 — 比較基盤と製品契約 (v0.4.x)
 
-**Goal:** make the existing feature set safe to evaluate and easy to trust.
+**目的:** PingCastleと公平に比較できる土台を作る。
 
-- Finish the mock LDAP fetch path and representative AD lab validation.
-- Define a versioned finding contract: stable IDs, severity, confidence,
-  evidence, remediation, source attributes, and collection timestamp.
-- Make authorisation, read-only behaviour, safe mode, and detection assumptions
-  visible in CLI help and every report.
-- Add a threat-model review to every new detector; reject checks that require
-  privilege escalation, code execution, credential dumping, or exploit logic.
-- Publish benchmark methodology and reproducible redacted fixtures.
+- 公開されているPingCastleの機能分類を参考に、diegoの対応・未対応・
+  対象外を一覧化する。実装のコピーは行わない。
+- Finding ID、重大度、信頼度、根拠属性、使用クエリ、修正案、収集時刻を
+  持つバージョン付きFinding Contractを確定する。
+- 合成・匿名化LDAPコーパス、マルチドメイン、信頼関係、部分応答、権限不足、
+  異常データのフィクスチャを整備する。
+- 比較テストの方法、AD規模、測定項目、免責事項を公開する。
+- CLI、JSON、Markdown、HTML、MCPで監査モードの挙動を統一する。
 
-**Exit criteria:** all v0.4 findings have fixture coverage; audit-mode reports
-pass schema and secret-scanning tests; benchmark results are published; the CLI
-and report formats are stable enough for external users.
+**完了条件:** 全検出に対応表とフィクスチャがあり、同じ入力から同じ結果を
+再生成できる。不利な比較結果も隠さず公開できる。
 
-## Phase 1 — Evidence-first detection engine (v0.5)
+## Phase 1 — 検出カバレッジ parity+ (v0.5)
 
-**Goal:** beat broad scanners on explainability and operator confidence.
+**目的:** PingCastleのADヘルスチェックに対して、標準ユーザー権限で重要な
+リスクの実用カバレッジを上回る。
 
-Status: core metadata and `--explain` support are implemented; detector
-expansion and mutation testing remain for follow-up releases.
+- ドメイン、フォレスト、外部信頼、SID Filtering、SID Historyを追加する。
+- 特権グループ、ネスト、委任、RBCD、非制約委任、証明書関連の露出を
+  読み取り専用で検出する。
+- stale user/computer、古い認証方式、弱いパスワードポリシー、危険な属性
+  公開、サービスアカウントのリスクを拡張する。
+- 各検出に必要権限、未取得データ、誤検知条件を表示する。
+- MITRE ATT&CK、CIS、Microsoft Security Baselineへの対応範囲を明示する。
 
-- Add stable finding IDs and evidence bundles with redaction by default.
-- ✅ Add detector metadata: required permissions, LDAP/Kerberos queries, expected
-  false positives, confidence rationale, and remediation references.
-- Expand read-only detectors for trusts, SID history, privileged group paths,
-  delegation variants, stale objects, password policy, and certificate-related
-  exposure where the data is available to a standard user.
-- Add deterministic fixture-driven tests, golden reports, and mutation tests for
-  parser boundaries and unsafe inputs.
-- ✅ Support `--explain <finding-id>` so an operator can trace finding → evidence →
-  remediation without reading source code.
+**完了条件:** 高影響リスクのカバレッジ比較を公開し、データ不足を安全と
+誤判定しない。
 
-**Exit criteria:** every finding is traceable to evidence; no detector silently
-falls back to an unsupported assumption; regression tests cover malformed and
-partial directory data.
+## Phase 2 — 証拠品質と誤検知優位 (v0.6)
 
-## Phase 2 — Exposure graph, without misleading completeness (v0.6)
+**目的:** スコア表示ではなく、担当者が短時間で判断できるレポートにする。
 
-**Goal:** provide useful prioritisation between a flat audit and a full graph
-platform.
+進捗: `--explain`、検出器メタデータ、bounded exposure graph、読み取り専用の
+修正効果simulationを実装済み。パーサーファジング、重複束ね、抑制履歴は次の
+マイナーリリースで継続する。
 
-- Collect only the object identifiers and relationships needed to connect
-  diego's own findings; document the exact graph boundary.
-- Generate a bounded “why this matters” exposure chain from the current user
-  context to protected groups, clearly labelled as an assessment path rather
-  than an exploit path.
-- Export an explicitly scoped interoperability format for downstream graph
-  tools; never advertise a partial export as a full BloodHound replacement.
-- Add remediation simulation: show which findings disappear when a selected
-  control is corrected, without changing the directory.
+- ✅ Findingごとに匿名化証拠、検出ロジック、信頼度、反証条件を保存する。
+- ✅ explain機能とレポート上の「なぜ検出されたか」「どう直すか」「直したら
+  何が変わるか」を統一する。
+- パーサーのファジング、ミューテーションテスト、ゴールデンレポートを追加する。
+- 同一オブジェクトの重複検出を抑え、根本原因と派生リスクを束ねる。
+- 判定の承認・抑制、抑制理由、期限、担当者を履歴に残す。
 
-**Exit criteria:** path explanations are reproducible from the same input;
-incomplete data is surfaced; graph output contains provenance and privacy
-controls; no active exploitation or lateral movement is added.
+**完了条件:** 代表コーパスでPrecision / Recallを測定でき、重大Findingの
+全件に証拠・信頼度・修正手順がある。
 
-## Phase 3 — Baseline, verification, and drift (v0.7)
+## Phase 3 — マルチドメイン規模と導入速度 (v0.7)
 
-**Goal:** turn a one-time assessment into measurable risk reduction.
+**目的:** PingCastleの複雑な環境対応に対抗し、少ない運用負荷で同等以上の
+範囲を扱う。
 
-- Version and sign baseline snapshots; support encrypted export for transfer.
-- Add baseline diff with suppression rationale, expiry, owner, and ticket ID.
-- Add “fixed / regressed / unknown” verification and remediation SLAs.
-- Provide scheduled, operator-controlled runs through the host's normal task
-  scheduler; keep collection read-only and document expected DC telemetry.
-- Emit compact JSON suitable for SIEM, CI, and ticketing ingestion.
+- 複数ドメイン、子ドメイン、外部フォレスト、信頼関係を一つの実行計画で扱う。
+- ドメイン単位・フォレスト単位・全体単位のスコープと除外を明示する。
+- 非接続ネットワーク、プロキシ、TLS、暗号化搬送、再送、部分失敗からの
+  再開を実装する。
+- LDAPページング、並列度制御、ジッター、クエリ予算を導入する。
+- Windows/Linuxの署名済みバイナリ、再現可能ビルド、静的Linux成果物を提供する。
+- 初回起動からレポートまでの導入時間を計測し、目標値を管理する。
 
-**Exit criteria:** a team can run recurring assessments, identify real drift,
-verify a fix, and retain an auditable history without a cloud dependency.
+**完了条件:** 大規模ADラボで実行時間、RSS、クエリ数、失敗率を公開できる。
+結果の欠落範囲が常に明示される。
 
-## Phase 4 — Deployment and integration moat (v0.8)
+## Phase 4 — スコアから修正効果へ (v0.8)
 
-**Goal:** make diego cheaper to adopt than a larger platform.
+**目的:** PingCastle型の状態把握を、修正完了までつなげる。
 
-- Ship signed, reproducible Windows and Linux binaries plus a static Linux
-  artifact where dependencies allow it.
-- Provide offline operation, proxy/TLS configuration, least-data collection,
-  and documented air-gapped transfer workflows.
-- Stabilise the library API and MCP interface with capability discovery and
-  audit-mode guarantees.
-- Add integrations for generic webhooks, SARIF, and common SIEM ingestion;
-  keep vendor-specific adapters optional and narrowly scoped.
-- Publish a support matrix for AD versions, trusts, TLS modes, and failure
-  behaviour.
+- ドメイン、組織、担当者、重要度を含むカスタムスコアリングを提供する。
+- ベースラインを署名・暗号化して保存し、fixed / regressed / unknownを判定する。
+- Findingに担当、チケットID、期限、抑制理由、例外期限を付ける。
+- 修正時にどのFindingと露出チェーンが消えるかを変更なしでシミュレーションする。
+- 任意間隔の再実行、履歴、傾向、修正率、SLA違反をローカルで確認する。
+- 収集時刻、ツールバージョン、設定ハッシュ、入力範囲を生成物に残す。
 
-**Exit criteria:** installation, authentication, scan, report, and export work
-in a disconnected lab; integrations are contract-tested; upgrade and rollback
-procedures are documented.
+**完了条件:** 初回検出から修正確認までをクラウド依存なしで再現でき、スコア
+変化をFindingと根拠データへ分解できる。
 
-## Phase 5 — Validation and ecosystem (v0.9 / 1.0)
+## Phase 5 — ADマップを超える限定公開露出グラフ (v0.9)
 
-**Goal:** convert technical differentiation into credible adoption.
+**目的:** ADの絵ではなく、標準ユーザーから保護対象までの優先すべき露出を
+説明する。
 
-- Run an independent review of protocol handling, secret lifecycle, and report
-  redaction.
-- Publish a benchmark against representative forest sizes, with query counts,
-  runtime, memory, and finding agreement—not marketing-only scores.
-- Publish detector contribution guidelines and a reviewed extension API.
-- Map findings to CIS, Microsoft security baselines, and MITRE ATT&CK with
-  scope and confidence labels; do not claim compliance certification.
-- Establish a public compatibility and release policy, including deprecation
-  rules for report schemas.
+- diegoの検出に必要な最小限のSID、グループ、委任、ACL関係だけを収集する。
+- 現在のユーザーコンテキストから保護対象までの「なぜ危険か」を、防御上の
+  露出チェーンとして表示する。
+- 各関係に根拠属性、信頼度、収集時刻、未取得情報を付ける。
+- 修正候補ごとの影響範囲と、不要な権限関係の削減効果を表示する。
+- 部分グラフを完全なBloodHound互換データとは称さず、境界を宣言する。
 
-**1.0 exit criteria:** reproducible release artifacts, independent security
-review completed, documented performance envelope, stable schema/API policy,
-and a measured remediation workflow from baseline to verified closure.
+**完了条件:** 同じ入力から同じチェーンを再生成でき、推論とデータ不足が
+明示される。侵害、横展開、永続化、認証情報窃取は追加しない。
 
-## Deferred until the core moat is proven
+## Phase 6 — 統合・独立検証・エコシステム (v1.0)
 
-- Native GSSAPI LDAP bind if it can be delivered without sacrificing the
-  cross-platform/static build target.
-- Entra ID or other cloud identity providers after on-premises AD coverage and
-  data-boundary controls are mature.
-- A plugin architecture after the detector contract is stable and there is a
-  demonstrated contributor need.
-- Full BloodHound-compatible graph collection, because partial graph data can
-  create false confidence.
+**目的:** 技術差別化を、企業が継続利用できる品質にする。
 
-## Non-goals
+- JSON Schema、SARIF、Webhook、MCP、SIEM入力を契約テストする。
+- API、ライブラリ、レポートスキーマの互換性・廃止ポリシーを公開する。
+- プロトコル処理、秘密情報ライフサイクル、リダクション、読み取り専用保証を
+  独立レビューする。
+- PingCastleとの検出率、誤検知、速度、メモリ、運用工数を同一条件で公開する。
+- 検出器の拡張APIとコントリビューター向けテスト要件を公開する。
+- AD、TLS、信頼関係、失敗時挙動のサポートマトリクスを更新する。
 
-diego will not become an exploitation framework, credential-dumping tool,
-lateral-movement tool, persistence mechanism, or detection-evasion guarantee.
-It will not run commands on target hosts, crack captured hashes, or make
-unauthorised changes to Active Directory.
+**1.0完了条件:** 独立レビュー、再現可能ビルド、比較ベンチマーク、安定した
+スキーマ/API、修正確認ワークフローがそろい、優位性を測定値で説明できる。
+
+## PingCastleを越えたと判断する基準
+
+次のすべてを満たした場合のみ、「越えた」と表現します。
+
+- 重要な標準ユーザー可視リスクの比較可能なカバレッジが上回る。
+- 高重大度Findingの100%に根拠・信頼度・修正手順がある。
+- 同一条件でレポート生成時間または運用工数を有意に削減する。
+- 再スキャンで修正確認まで追跡できる。
+- 監査モードの秘密情報漏えいがゼロである。
+- 比較方法と不利な結果を含めて再現可能な形で公開できる。
+
+## 恒久的な非目標
+
+diegoは、攻撃実行、認証情報ダンプ、ハッシュクラッキング、横展開、永続化、
+検知回避保証、Active Directoryへの無許可変更を行いません。

@@ -168,7 +168,9 @@
 - Advanced LDAP queries
 - Full integration tests
 
-**v0.5.0** (Current release)
+**v0.6.0** (Current release)
+- Bounded exposure paths with provenance
+- Read-only remediation impact simulation
 - Evidence provenance metadata
 - `--explain <finding-id>` operator workflow
 - Static binary (musl)

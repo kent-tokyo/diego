@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-30
+
+### Added
+- Bounded exposure graph with explicit provenance, missing-data boundaries,
+  and standard-user assessment scope.
+- Read-only remediation simulation for selected finding IDs.
+
+### Changed
+- Exposure paths are labelled as assessment paths, not exploitation paths or
+  complete BloodHound-compatible graph data.
+
 ## [0.5.0] - 2026-08-30
 
 ### Added
@@ -118,6 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   LDAP enumeration, LLMNR/NBT-NS passive monitoring, Claude API analysis, and
   MCP server mode.
 
+[0.6.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.6.0
 [0.5.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.5.0
 [0.4.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.3.0
