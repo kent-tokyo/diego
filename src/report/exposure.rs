@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use super::{Finding, Report, Severity};
+use chrono::{DateTime, Utc};
+
+use super::{Confidence, Finding, Report, Severity};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ExposureNode {
@@ -8,6 +10,8 @@ pub struct ExposureNode {
     pub kind: String,
     pub label: String,
     pub source_finding_ids: Vec<String>,
+    pub confidence: Confidence,
+    pub observed_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -16,6 +20,8 @@ pub struct ExposureEdge {
     pub to: String,
     pub relationship: String,
     pub source_finding_ids: Vec<String>,
+    pub confidence: Confidence,
+    pub observed_at: DateTime<Utc>,
 }
 
 /// A deliberately bounded graph: it contains only relationships evidenced by
@@ -47,6 +53,8 @@ pub fn build(report: &Report) -> ExposureGraph {
         kind: "context".into(),
         label: "Authenticated standard user context".into(),
         source_finding_ids: Vec::new(),
+        confidence: Confidence::High,
+        observed_at: report.generated_at,
     }];
     let mut edges = Vec::new();
 
@@ -57,12 +65,37 @@ pub fn build(report: &Report) -> ExposureGraph {
             kind: "finding".into(),
             label: finding.title.clone(),
             source_finding_ids: vec![finding.id.clone()],
+            confidence: finding.confidence.clone(),
+            observed_at: finding.timestamp,
         });
+        let object = object_node(finding, report.generated_at);
+        if let Some(object) = object {
+            let object_id = object.id.clone();
+            nodes.push(object);
+            edges.push(ExposureEdge {
+                from: root.clone(),
+                to: object_id.clone(),
+                relationship: "standard-user-readable object evidence".into(),
+                source_finding_ids: vec![finding.id.clone()],
+                confidence: finding.confidence.clone(),
+                observed_at: finding.timestamp,
+            });
+            edges.push(ExposureEdge {
+                from: object_id,
+                to: finding_node.clone(),
+                relationship: "object produces documented finding".into(),
+                source_finding_ids: vec![finding.id.clone()],
+                confidence: finding.confidence.clone(),
+                observed_at: finding.timestamp,
+            });
+        }
         edges.push(ExposureEdge {
             from: root.clone(),
             to: finding_node.clone(),
             relationship: "standard-user-visible exposure".into(),
             source_finding_ids: vec![finding.id.clone()],
+            confidence: finding.confidence.clone(),
+            observed_at: finding.timestamp,
         });
 
         if indicates_protected_impact(finding) {
@@ -72,13 +105,37 @@ pub fn build(report: &Report) -> ExposureGraph {
                     kind: "bounded-target".into(),
                     label: "Protected or privileged assets (scope-limited)".into(),
                     source_finding_ids: Vec::new(),
+                    confidence: Confidence::Low,
+                    observed_at: report.generated_at,
                 });
             }
             edges.push(ExposureEdge {
-                from: finding_node,
+                from: finding_node.clone(),
                 to: protected.clone(),
                 relationship: "may affect protected assets".into(),
                 source_finding_ids: vec![finding.id.clone()],
+                confidence: finding.confidence.clone(),
+                observed_at: finding.timestamp,
+            });
+        }
+
+        for (index, step) in finding.remediation_steps.iter().enumerate() {
+            let remediation_id = format!("remediation:{}:{}", finding.id, index + 1);
+            nodes.push(ExposureNode {
+                id: remediation_id.clone(),
+                kind: "remediation-candidate".into(),
+                label: step.clone(),
+                source_finding_ids: vec![finding.id.clone()],
+                confidence: finding.confidence.clone(),
+                observed_at: finding.timestamp,
+            });
+            edges.push(ExposureEdge {
+                from: finding_node.clone(),
+                to: remediation_id,
+                relationship: "candidate remediation reduces this documented exposure".into(),
+                source_finding_ids: vec![finding.id.clone()],
+                confidence: finding.confidence.clone(),
+                observed_at: finding.timestamp,
             });
         }
     }
@@ -91,10 +148,25 @@ pub fn build(report: &Report) -> ExposureGraph {
             "Full group membership and SID relationship graph".into(),
             "ACL security descriptors not collected by the current read-only queries".into(),
             "Trust topology and certificate-template relationships".into(),
+            "Object-to-protected-asset reachability is not inferred without collected ACL/SID evidence".into(),
         ],
         nodes,
         edges,
     }
+}
+
+fn object_node(finding: &Finding, observed_at: DateTime<Utc>) -> Option<ExposureNode> {
+    let (kind, key) = if finding.evidence.get("account").is_some() {
+        ("account", "account")
+    } else if finding.evidence.get("computer").is_some() {
+        ("computer", "computer")
+    } else if finding.evidence.get("cn").is_some() {
+        ("directory-object", "cn")
+    } else {
+        return None;
+    };
+    let label = finding.evidence.get(key).and_then(serde_json::Value::as_str)?.to_string();
+    Some(ExposureNode { id: format!("object:{}:{}", kind, label.to_ascii_lowercase()), kind: kind.into(), label, source_finding_ids: vec![finding.id.clone()], confidence: finding.confidence.clone(), observed_at })
 }
 
 pub fn simulate(report: &Report, finding_ids: &[String]) -> RemediationSimulation {

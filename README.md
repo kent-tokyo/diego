@@ -158,6 +158,12 @@ The assessment applies configurable severity weights, carries owner/ticket/due
 date/suppression metadata, and derives fixed findings from the baseline. It is
 written locally and does not send tickets or modify the directory.
 
+The exposure graph is intentionally limited to evidence already collected by
+diego. Nodes and edges include confidence and observation time, while missing
+SID/ACL/trust relationships remain explicit unknowns. It is not a BloodHound
+compatible export and does not add exploitation, lateral movement, or
+credential-theft workflows.
+
 #### 1. Full Scan (All Modules)
 
 Run all diagnostic modules and output JSON findings:
