@@ -159,7 +159,7 @@ The assessment applies configurable severity weights, carries owner/ticket/due
 date/suppression metadata, and derives fixed findings from the baseline. It is
 written locally and does not send tickets or modify the directory.
 
-#### SARIF integration (v0.12)
+#### SARIF and webhook integration (v0.13)
 
 Write a SARIF 2.1.0 sidecar alongside the normal report for code-scanning and
 SIEM ingestion:
@@ -174,6 +174,12 @@ MITRE IDs, and remediation guidance. It deliberately omits the raw `evidence`
 object, so the audit-mode redaction boundary remains in force. When `--baseline`
 is supplied, results also include `baselineState`: `new`, `updated`,
 `unchanged`, or `absent` for resolved baseline findings.
+
+For SIEM or webhook delivery, `--webhook-output <PATH>` writes a transport-neutral
+`diego.scan.completed.v1` event. It contains summary counts, finding IDs, titles,
+severity, and baseline lifecycle state, but never raw evidence or crackable hash
+material. diego does not send the event over the network; operators can deliver
+the sidecar with their existing authenticated webhook client.
 
 The exposure graph is intentionally limited to evidence already collected by
 diego. Nodes and edges include confidence and observation time, while missing

@@ -99,6 +99,9 @@ pub struct Cli {
     /// Write a SARIF 2.1.0 findings sidecar for CI/security-platform ingestion
     #[arg(long)]
     pub sarif_output: Option<PathBuf>,
+    /// Write an evidence-safe scan.completed webhook/SIEM event sidecar
+    #[arg(long)]
+    pub webhook_output: Option<PathBuf>,
 
     /// JSON multi-domain execution plan (credentials remain CLI/env supplied)
     #[arg(long)]
@@ -162,6 +165,7 @@ pub struct Config {
     pub governance_config: Option<PathBuf>,
     pub governance_output: Option<PathBuf>,
     pub sarif_output: Option<PathBuf>,
+    pub webhook_output: Option<PathBuf>,
     // MCP
     pub mcp: bool,
 }
@@ -237,6 +241,7 @@ impl Config {
             governance_config: cli.governance_config,
             governance_output: cli.governance_output,
             sarif_output: cli.sarif_output,
+            webhook_output: cli.webhook_output,
             mcp: cli.mcp,
         })
     }

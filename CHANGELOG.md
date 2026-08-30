@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-30
+
+### Added
+- Added an evidence-safe `diego.scan.completed.v1` webhook/SIEM sidecar via `--webhook-output <path>`.
+- Added contract coverage for baseline lifecycle states and redaction boundaries in the webhook payload.
+
 ## [0.12.0] - 2026-08-30
 
 ### Added
@@ -170,6 +176,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.9.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.9.0
 [0.10.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.10.0
 [0.12.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.12.0
+[0.13.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.13.0
 [0.5.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.5.0
 [0.4.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.3.0

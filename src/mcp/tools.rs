@@ -627,6 +627,7 @@ fn build_minimal_config(
         governance_config: None,
         governance_output: None,
         sarif_output: None,
+        webhook_output: None,
         mcp: false,
     })
 }

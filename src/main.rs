@@ -136,6 +136,11 @@ async fn main() -> anyhow::Result<()> {
         eprintln!("[+] SARIF report written to {}", path.display());
     }
 
+    if let Some(path) = &config.webhook_output {
+        std::fs::write(path, report::webhook::generate(&report)?)?;
+        eprintln!("[+] Webhook event written to {}", path.display());
+    }
+
     if config.exposure_graph {
         println!("{}", serde_json::to_string_pretty(&report::exposure::build(&report))?);
         return Ok(());

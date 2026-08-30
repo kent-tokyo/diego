@@ -8,6 +8,7 @@ pub mod json;
 pub mod markdown;
 pub mod sample;
 pub mod sarif;
+pub mod webhook;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
