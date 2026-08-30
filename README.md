@@ -159,7 +159,7 @@ The assessment applies configurable severity weights, carries owner/ticket/due
 date/suppression metadata, and derives fixed findings from the baseline. It is
 written locally and does not send tickets or modify the directory.
 
-#### SARIF integration (v0.10)
+#### SARIF integration (v0.12)
 
 Write a SARIF 2.1.0 sidecar alongside the normal report for code-scanning and
 SIEM ingestion:
