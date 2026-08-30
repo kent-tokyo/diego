@@ -96,6 +96,10 @@ pub struct Cli {
     #[arg(long)]
     pub governance_output: Option<PathBuf>,
 
+    /// Write a SARIF 2.1.0 findings sidecar for CI/security-platform ingestion
+    #[arg(long)]
+    pub sarif_output: Option<PathBuf>,
+
     /// JSON multi-domain execution plan (credentials remain CLI/env supplied)
     #[arg(long)]
     pub plan: Option<PathBuf>,
@@ -157,6 +161,7 @@ pub struct Config {
     pub simulate_remediation: Option<String>,
     pub governance_config: Option<PathBuf>,
     pub governance_output: Option<PathBuf>,
+    pub sarif_output: Option<PathBuf>,
     // MCP
     pub mcp: bool,
 }
@@ -231,6 +236,7 @@ impl Config {
             simulate_remediation: cli.simulate_remediation,
             governance_config: cli.governance_config,
             governance_output: cli.governance_output,
+            sarif_output: cli.sarif_output,
             mcp: cli.mcp,
         })
     }

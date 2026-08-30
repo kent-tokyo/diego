@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-30
+
+### Added
+- SARIF 2.1.0 sidecar output via `--sarif <path>` for CI and security-platform ingestion.
+- Typed Finding-to-SARIF mapping with severity, confidence, MITRE ID, timestamps, and remediation guidance.
+- Contract tests ensuring SARIF output preserves audit-mode boundaries and omits raw evidence.
+
 ## [0.9.0] - 2026-08-30
 
 ### Added
@@ -154,6 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.7.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.7.0
 [0.8.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.8.0
 [0.9.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.9.0
+[0.10.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.10.0
 [0.5.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.5.0
 [0.4.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.3.0

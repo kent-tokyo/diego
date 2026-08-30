@@ -126,6 +126,7 @@ diego [OPTIONS]
 | `--plan <PATH>` | — | Execute a credential-free multi-domain JSON plan |
 | `--governance-config <PATH>` | — | Local scoring and Finding ownership/SLA metadata JSON |
 | `--governance-output <PATH>` | — | Write a local fixed/regressed/open governance assessment |
+| `--sarif <PATH>` | — | Write a SARIF 2.1.0 findings sidecar for CI/security tools |
 | `--timeout <TIMEOUT>` | `10` | Per-query timeout in seconds |
 | `--interface <INTERFACE>` | Auto-detect | Network interface for passive listening |
 | `--ai-model <AI_MODEL>` | `claude-sonnet-4-6` | Claude model for analysis |
@@ -157,6 +158,21 @@ diego --dc 10.0.0.1 --domain corp.local --username jdoe \
 The assessment applies configurable severity weights, carries owner/ticket/due
 date/suppression metadata, and derives fixed findings from the baseline. It is
 written locally and does not send tickets or modify the directory.
+
+#### SARIF integration (v0.10)
+
+Write a SARIF 2.1.0 sidecar alongside the normal report for code-scanning and
+SIEM ingestion:
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local --username jdoe \
+  --modules ldap --output findings.json --sarif findings.sarif
+```
+
+SARIF contains finding titles, descriptions, severity, confidence, timestamps,
+MITRE IDs, and remediation guidance. It deliberately omits the raw `evidence`
+object, so the audit-mode redaction boundary remains in force. Webhook delivery,
+MCP/SIEM contract tests, and independent validation remain v1.0 roadmap work.
 
 The exposure graph is intentionally limited to evidence already collected by
 diego. Nodes and edges include confidence and observation time, while missing

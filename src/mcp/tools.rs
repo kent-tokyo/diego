@@ -626,6 +626,7 @@ fn build_minimal_config(
         simulate_remediation: None,
         governance_config: None,
         governance_output: None,
+        sarif_output: None,
         mcp: false,
     })
 }

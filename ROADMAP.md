@@ -135,6 +135,10 @@ regressed/unknownの継続的な状態管理は次のマイナーリリースで
 
 ## Phase 6 — 統合・独立検証・エコシステム (v1.0)
 
+進捗: SARIF 2.1.0 のローカル sidecar 出力（`--sarif`）と、Finding 数・重大度・
+監査モードの証跡非出力を検証する契約テストを実装済み。Webhook、MCP/SIEM の
+契約テスト、独立レビュー、対応マトリクスは v1.0 に継続する。
+
 **目的:** 技術差別化を、企業が継続利用できる品質にする。
 
 - JSON Schema、SARIF、Webhook、MCP、SIEM入力を契約テストする。
