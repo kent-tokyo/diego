@@ -4,7 +4,7 @@ use std::time::Instant;
 use clap::Parser;
 
 use diego::ai;
-use diego::config::{Cli, Config, ModuleKind};
+use diego::config::{Cli, Config, ModuleKind, RunMode};
 use diego::mcp;
 use diego::modules::{
     kerberos::KerberosModule,
@@ -125,6 +125,14 @@ async fn main() -> anyhow::Result<()> {
     // ── Build report ──────────────────────────────────────────────────────────
     let scan_ctx = make_scan_context(&config, modules_run, start);
     let mut report = Report::new(scan_ctx, all_findings);
+
+    // Keep the same redaction boundary for AI/chat as for file/stdout output.
+    // Raw hashes are only retained when both explicit full-mode flags are set.
+    if !(config.mode == RunMode::Full && config.export_hashes) {
+        for finding in &mut report.findings {
+            report::redact_evidence(&mut finding.evidence);
+        }
+    }
 
     eprintln!(
         "[+] Scan complete ({:.1}s): {} findings ({} Critical, {} High, {} Medium)",

@@ -12,7 +12,7 @@ body:
     attributes:
       label: diego version
       description: Output of `diego --version`
-      placeholder: "0.2.0"
+      placeholder: "0.3.0"
     validations:
       required: true
   - type: dropdown

@@ -63,6 +63,16 @@ diego ... --ai-analyze --chat
 diego --mcp
 ```
 
+### 安全な出力モード
+
+既定の `audit` モードでは、AS-REP / TGS の脆弱性所見は出力しますが、オフライン解析可能なハッシュ値はレポートから自動的に除去します。認可済み評価でハッシュ値が必要な場合だけ、次の2つを明示的に指定します。
+
+```bash
+diego ... --mode full --export-hashes
+```
+
+`--export-hashes` 単独では実行できません。MCP の `run_asrep_roasting` と `run_kerberoasting` も `export_hashes: false` が既定値です。
+
 ### パスワード解決方法 (優先順位順)
 
 `--password` でパスワードが指定されない場合、diego は以下の方法を順に試します：

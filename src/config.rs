@@ -348,4 +348,5 @@ mod tests {
         assert!(matches!(parse_format("json"), ReportFormat::Json));
         assert!(matches!(parse_format("nonsense"), ReportFormat::Json));
     }
+
 }

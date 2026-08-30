@@ -2,7 +2,7 @@ name: Release
 
 # Tag-triggered release: builds the static Linux (musl) and Windows binaries and
 # attaches them to a GitHub Release. Cut a release by pushing a tag, e.g.:
-#   git tag v0.2.0 && git push origin v0.2.0
+#   git tag v0.3.0 && git push origin v0.3.0
 
 on:
   push:
@@ -75,7 +75,10 @@ jobs:
             See the [CHANGELOG](https://github.com/kent-tokyo/diego/blob/main/CHANGELOG.md) for the full, categorised list (Added / Changed / Fixed / Security).
 
             ## Migration
-            - No CLI breaking changes. New flags: `--format html`, `--baseline <prior.json>`.
+            - Safe output is now the default. Roastable findings remain visible,
+              but crackable hash material requires `--mode full --export-hashes`.
+            - New flags: `--format html`, `--baseline <prior.json>`, `--mode`,
+              and `--export-hashes`.
             - Reports now include a `confidence` field; baseline JSON from older
               builds still loads (confidence defaults to HIGH).
 

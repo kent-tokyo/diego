@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-30
+
 ### Added
+- **Defensive-by-default hash output:** CLI reports and MCP full scans redact
+  crackable AS-REP/TGS material by default. Explicit `--mode full
+  --export-hashes` (or MCP `export_hashes: true`) is required to emit it.
 - **Published JSON Schema** for the report (`docs/report.schema.json`) — the
   integration contract for downstream/CI consumers — with a test validating the
   sample output against it.
@@ -28,9 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   posture, removing residual "post-exploitation" wording so it matches the
   tagline.
 - Added `docs/TESTING.md` (golden / detection / integration / schema test layers
-  and what each does **not** guard) and `docs/DESIGN-safe-mode.md` (design sketch
-  for a defensive-by-default `--mode audit` / `--export-hashes`, not yet
-  implemented).
+  and what each does **not** guard) and `docs/DESIGN-safe-mode.md` (the safety
+  contract for defensive-by-default `--mode audit` / `--export-hashes`).
 - ROADMAP: expanded the reproduction-corpus item into concrete staged milestones
   (fixture format → load-and-analyze tests → mock LDAP) and listed safe mode.
 
@@ -91,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   LDAP enumeration, LLMNR/NBT-NS passive monitoring, Claude API analysis, and
   MCP server mode.
 
+[0.3.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.3.0
 [0.2.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.2.0
 [0.1.1]: https://github.com/kent-tokyo/diego/releases/tag/v0.1.1
 [0.1.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.1.0

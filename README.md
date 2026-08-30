@@ -63,6 +63,16 @@ diego ... --ai-analyze --chat
 diego --mcp
 ```
 
+### Safe output mode
+
+The default `audit` mode reports roastable accounts but removes crackable AS-REP/TGS hash material from reports. For an authorised assessment that explicitly requires hashes, use both flags:
+
+```bash
+diego ... --mode full --export-hashes
+```
+
+`--export-hashes` alone is rejected. The MCP `run_asrep_roasting` and `run_kerberoasting` tools likewise default to `export_hashes: false`.
+
 ### Password Resolution (Priority Order)
 
 When password is not provided with `--password`, diego tries these methods in order:
@@ -490,7 +500,7 @@ The release profile applies LTO, single codegen unit, and binary stripping to mi
 ## Documentation
 
 - [Threat Model](docs/THREAT_MODEL.md) — goals, non-goals, detection assumptions, supported environments, limitations
-- [Roadmap](ROADMAP.md) — 0.2.x stabilisation focus; parked/deferred items
+- [Roadmap](ROADMAP.md) — current stabilisation focus; parked/deferred items
 - [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) · [Testing layers](docs/TESTING.md)
 - [Report JSON Schema](docs/report.schema.json) — the output contract for integrators
 - [Benchmarks](docs/BENCHMARKS.md) — methodology (results pending lab validation)
