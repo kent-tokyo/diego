@@ -124,6 +124,8 @@ diego [OPTIONS]
 | `--exposure-graph` | — | Emit a bounded, provenance-preserving exposure graph as JSON |
 | `--simulate-remediation <FINDING_IDS>` | — | Simulate removing comma-separated findings without changing the directory |
 | `--plan <PATH>` | — | Execute a credential-free multi-domain JSON plan |
+| `--governance-config <PATH>` | — | Local scoring and Finding ownership/SLA metadata JSON |
+| `--governance-output <PATH>` | — | Write a local fixed/regressed/open governance assessment |
 | `--timeout <TIMEOUT>` | `10` | Per-query timeout in seconds |
 | `--interface <INTERFACE>` | Auto-detect | Network interface for passive listening |
 | `--ai-model <AI_MODEL>` | `claude-sonnet-4-6` | Claude model for analysis |
@@ -143,6 +145,18 @@ v0.7 so query volume remains predictable. The JSON `FleetReport` preserves each
 target's status, completed report or error, requested scope, and aggregate
 severity counts. Scope is explicit metadata; trust and forest membership are
 not inferred from the plan file.
+
+#### Local remediation assessment (v0.8)
+
+```bash
+diego --dc 10.0.0.1 --domain corp.local --username jdoe \
+  --modules ldap --baseline previous.json \
+  --governance-config governance.json --governance-output assessment.json
+```
+
+The assessment applies configurable severity weights, carries owner/ticket/due
+date/suppression metadata, and derives fixed findings from the baseline. It is
+written locally and does not send tickets or modify the directory.
 
 #### 1. Full Scan (All Modules)
 

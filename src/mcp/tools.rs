@@ -624,6 +624,8 @@ fn build_minimal_config(
         explain: None,
         exposure_graph: false,
         simulate_remediation: None,
+        governance_config: None,
+        governance_output: None,
         mcp: false,
     })
 }

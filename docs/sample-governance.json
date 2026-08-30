@@ -1,0 +1,14 @@
+{
+  "organization": "example-org",
+  "default_owner": "ad-platform",
+  "weights": {"critical": 10, "high": 6, "medium": 3, "low": 1, "info": 0},
+  "findings": {
+    "LDAP-SPN-example": {
+      "owner": "identity-team",
+      "ticket_id": "SEC-1234",
+      "due_at": "2026-09-30T00:00:00Z",
+      "suppression_reason": "例外承認済みの場合のみ記入",
+      "exception_expires_at": "2026-10-31T00:00:00Z"
+    }
+  }
+}

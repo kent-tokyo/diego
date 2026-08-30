@@ -9,6 +9,7 @@ use diego::mcp;
 use diego::run_scan;
 use diego::report::{self, Report};
 use diego::report::fleet::{FleetReport, ScanPlan, TargetResult};
+use diego::report::governance::GovernanceConfig;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -84,6 +85,7 @@ async fn main() -> anyhow::Result<()> {
     eprintln!("[+] Modules: {:?}", config.modules);
     let start = Instant::now();
     let mut report = run_scan(Arc::clone(&config)).await?;
+    let mut baseline_for_governance: Option<Report> = None;
 
     eprintln!(
         "[+] Scan complete ({:.1}s): {} findings ({} Critical, {} High, {} Medium)",
@@ -106,6 +108,7 @@ async fn main() -> anyhow::Result<()> {
             d.new.len(), d.resolved.len(), d.severity_changed.len(), d.unchanged_count,
         );
         report = report.with_diff(d);
+        baseline_for_governance = Some(baseline);
     }
 
     if let Some(finding_id) = &config.explain {
@@ -114,6 +117,18 @@ async fn main() -> anyhow::Result<()> {
             None => return Err(anyhow::anyhow!("Finding ID not present in this scan: {}", finding_id)),
         }
         return Ok(());
+    }
+
+    if let Some(path) = &config.governance_output {
+        let governance_config = if let Some(config_path) = &config.governance_config {
+            let data = std::fs::read_to_string(config_path).map_err(|e| anyhow::anyhow!("Failed to read governance config {}: {}", config_path.display(), e))?;
+            serde_json::from_str(&data).map_err(|e| anyhow::anyhow!("Failed to parse governance config {}: {}", config_path.display(), e))?
+        } else {
+            GovernanceConfig::default()
+        };
+        let assessment = report::governance::assess(&report, baseline_for_governance.as_ref(), &governance_config);
+        std::fs::write(path, serde_json::to_string_pretty(&assessment)?)?;
+        eprintln!("[+] Governance assessment written to {}", path.display());
     }
 
     if config.exposure_graph {

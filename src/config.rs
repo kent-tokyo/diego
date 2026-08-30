@@ -88,6 +88,14 @@ pub struct Cli {
     #[arg(long, value_name = "FINDING_IDS")]
     pub simulate_remediation: Option<String>,
 
+    /// JSON governance policy for local scoring and ownership metadata
+    #[arg(long)]
+    pub governance_config: Option<PathBuf>,
+
+    /// Write a local governance assessment JSON sidecar
+    #[arg(long)]
+    pub governance_output: Option<PathBuf>,
+
     /// JSON multi-domain execution plan (credentials remain CLI/env supplied)
     #[arg(long)]
     pub plan: Option<PathBuf>,
@@ -147,6 +155,8 @@ pub struct Config {
     pub explain: Option<String>,
     pub exposure_graph: bool,
     pub simulate_remediation: Option<String>,
+    pub governance_config: Option<PathBuf>,
+    pub governance_output: Option<PathBuf>,
     // MCP
     pub mcp: bool,
 }
@@ -219,6 +229,8 @@ impl Config {
             explain: cli.explain,
             exposure_graph: cli.exposure_graph,
             simulate_remediation: cli.simulate_remediation,
+            governance_config: cli.governance_config,
+            governance_output: cli.governance_output,
             mcp: cli.mcp,
         })
     }

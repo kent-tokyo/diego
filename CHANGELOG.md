@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-30
+
+### Added
+- Local configurable severity scoring and governance assessment output.
+- Finding ownership, ticket, due date, suppression, and exception metadata.
+- Baseline-aware fixed/regressed state evaluation and SHA-256 policy fingerprint.
+
 ## [0.7.0] - 2026-08-30
 
 ### Added
@@ -138,6 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [0.6.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.6.0
 [0.7.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.7.0
+[0.8.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.8.0
 [0.5.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.5.0
 [0.4.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.3.0

@@ -2,6 +2,7 @@ pub mod diff;
 pub mod explain;
 pub mod exposure;
 pub mod fleet;
+pub mod governance;
 pub mod html;
 pub mod json;
 pub mod markdown;
