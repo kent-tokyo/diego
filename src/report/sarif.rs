@@ -4,7 +4,7 @@
 //! guidance only. Evidence is kept in the normal diego report so the audit
 //! mode redaction boundary cannot be bypassed by requesting SARIF output.
 
-use super::{Finding, Report, Severity};
+use super::{diff::DiffEntry, Finding, Report, Severity};
 use serde::Serialize;
 
 const SARIF_VERSION: &str = "2.1.0";
@@ -58,13 +58,25 @@ pub struct SarifResult {
     pub rule_id: String,
     pub level: &'static str,
     pub message: SarifMessage,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub baseline_state: Option<&'static str>,
     pub properties: serde_json::Value,
 }
 
 /// Convert a report to a SARIF 2.1.0 document without copying evidence.
 pub fn generate(report: &Report) -> anyhow::Result<String> {
-    let rules = report.findings.iter().map(rule_for).collect::<Vec<_>>();
-    let results = report.findings.iter().map(result_for).collect::<Vec<_>>();
+    let mut rules = report.findings.iter().map(rule_for).collect::<Vec<_>>();
+    let mut results = report
+        .findings
+        .iter()
+        .map(|finding| result_for(finding, state_for(report, finding)))
+        .collect::<Vec<_>>();
+    if let Some(diff) = &report.diff {
+        for entry in &diff.resolved {
+            rules.push(rule_for_diff(entry));
+            results.push(result_for_diff(entry));
+        }
+    }
 
     let log = SarifLog {
         version: SARIF_VERSION,
@@ -85,25 +97,63 @@ pub fn generate(report: &Report) -> anyhow::Result<String> {
 }
 
 fn rule_for(finding: &Finding) -> SarifRule {
+    rule(
+        finding.id.clone(),
+        finding.title.clone(),
+        finding.description.clone(),
+        finding.remediation_steps.join(" "),
+    )
+}
+
+fn rule_for_diff(entry: &DiffEntry) -> SarifRule {
+    rule(
+        entry.id.clone(),
+        entry.title.clone(),
+        "Finding was present in the baseline but is absent from the current scan.".into(),
+        "Validate the remediation and retain the baseline for audit history.".into(),
+    )
+}
+
+fn rule(id: String, title: String, description: String, help: String) -> SarifRule {
     SarifRule {
-        id: finding.id.clone(),
-        short_description: SarifMessage {
-            text: finding.title.clone(),
-        },
-        full_description: SarifMessage {
-            text: finding.description.clone(),
-        },
+        id,
+        short_description: SarifMessage { text: title },
+        full_description: SarifMessage { text: description },
         help: SarifMessage {
-            text: if finding.remediation_steps.is_empty() {
+            text: if help.is_empty() {
                 "Review the finding and validate the affected configuration.".into()
             } else {
-                finding.remediation_steps.join(" ")
+                help
             },
         },
     }
 }
 
-fn result_for(finding: &Finding) -> SarifResult {
+fn result_for(finding: &Finding, baseline_state: Option<&'static str>) -> SarifResult {
+    SarifResult {
+        rule_id: finding.id.clone(),
+        level: level_for(&finding.severity),
+        message: SarifMessage {
+            text: finding.description.clone(),
+        },
+        baseline_state,
+        properties: properties_for(finding),
+    }
+}
+
+fn result_for_diff(entry: &DiffEntry) -> SarifResult {
+    SarifResult {
+        rule_id: entry.id.clone(),
+        level: level_for(&entry.severity),
+        message: SarifMessage {
+            text: "Finding is absent from the current scan.".into(),
+        },
+        baseline_state: Some("absent"),
+        properties: serde_json::json!({ "severity": entry.severity.to_string() }),
+    }
+}
+
+fn properties_for(finding: &Finding) -> serde_json::Value {
     let mut properties = serde_json::Map::new();
     properties.insert(
         "module".into(),
@@ -128,13 +178,21 @@ fn result_for(finding: &Finding) -> SarifResult {
         );
     }
 
-    SarifResult {
-        rule_id: finding.id.clone(),
-        level: level_for(&finding.severity),
-        message: SarifMessage {
-            text: finding.description.clone(),
-        },
-        properties: serde_json::Value::Object(properties),
+    serde_json::Value::Object(properties)
+}
+
+fn state_for(report: &Report, finding: &Finding) -> Option<&'static str> {
+    let diff = report.diff.as_ref()?;
+    if diff.new.iter().any(|entry| entry.id == finding.id) {
+        Some("new")
+    } else if diff
+        .severity_changed
+        .iter()
+        .any(|entry| entry.id == finding.id)
+    {
+        Some("updated")
+    } else {
+        Some("unchanged")
     }
 }
 
@@ -157,12 +215,40 @@ mod tests {
             serde_json::from_str(&generate(&sample_report()).unwrap()).unwrap();
         assert_eq!(value["version"], SARIF_VERSION);
         assert_eq!(value["runs"][0]["tool"]["driver"]["name"], "diego");
-        assert_eq!(value["runs"][0]["results"].as_array().unwrap().len(), 5);
+        assert_eq!(value["runs"][0]["results"].as_array().unwrap().len(), 6);
         assert!(value["runs"][0]["results"][0].get("evidence").is_none());
         assert!(serde_json::to_string(&value).unwrap().contains("AS-REP"));
         assert!(!serde_json::to_string(&value)
             .unwrap()
             .contains("hashcat_hash"));
+    }
+
+    #[test]
+    fn maps_baseline_lifecycle_to_sarif_states() {
+        let value: serde_json::Value =
+            serde_json::from_str(&generate(&sample_report()).unwrap()).unwrap();
+        let results = value["runs"][0]["results"].as_array().unwrap();
+        assert_eq!(
+            results
+                .iter()
+                .find(|r| r["ruleId"] == "KRB-KERBEROAST-mssql")
+                .unwrap()["baselineState"],
+            "new"
+        );
+        assert_eq!(
+            results
+                .iter()
+                .find(|r| r["ruleId"] == "KRB-ASREP-svc_backup")
+                .unwrap()["baselineState"],
+            "unchanged"
+        );
+        assert_eq!(
+            results
+                .iter()
+                .find(|r| r["ruleId"] == "LDAP-OLD-RESOLVED")
+                .unwrap()["baselineState"],
+            "absent"
+        );
     }
 
     #[test]

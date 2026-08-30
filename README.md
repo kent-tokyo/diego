@@ -171,8 +171,9 @@ diego --dc 10.0.0.1 --domain corp.local --username jdoe \
 
 SARIF contains finding titles, descriptions, severity, confidence, timestamps,
 MITRE IDs, and remediation guidance. It deliberately omits the raw `evidence`
-object, so the audit-mode redaction boundary remains in force. Webhook delivery,
-MCP/SIEM contract tests, and independent validation remain v1.0 roadmap work.
+object, so the audit-mode redaction boundary remains in force. When `--baseline`
+is supplied, results also include `baselineState`: `new`, `updated`,
+`unchanged`, or `absent` for resolved baseline findings.
 
 The exposure graph is intentionally limited to evidence already collected by
 diego. Nodes and edges include confidence and observation time, while missing

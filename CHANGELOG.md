@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-08-30
+
+### Added
+- Baseline-aware SARIF `baselineState` values for new, updated, unchanged, and absent findings.
+- Resolved baseline findings are retained in SARIF as `absent` results for CI triage.
+- Contract tests covering the finding lifecycle mapping without exposing raw evidence.
+
 ## [0.10.0] - 2026-08-30
 
 ### Added
@@ -162,6 +169,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.8.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.8.0
 [0.9.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.9.0
 [0.10.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.10.0
+[0.11.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.11.0
 [0.5.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.5.0
 [0.4.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.3.0
