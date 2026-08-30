@@ -2,7 +2,7 @@ name: Release
 
 # Tag-triggered release: builds the static Linux (musl) and Windows binaries and
 # attaches them to a GitHub Release. Cut a release by pushing a tag, e.g.:
-#   git tag v0.4.0 && git push origin v0.4.0
+#   git tag v0.5.0 && git push origin v0.5.0
 
 on:
   push:
@@ -81,6 +81,8 @@ jobs:
               and `--export-hashes`.
             - Reports now include a `confidence` field; baseline JSON from older
               builds still loads (confidence defaults to HIGH).
+            - Use `--explain <finding-id>` to inspect detector provenance,
+              evidence, confidence rationale, and remediation.
 
             ## Known limitations
             - **Detection:** diego avoids host-based EDR runtimes, but DC-side

@@ -1,72 +1,154 @@
 # diego Roadmap
 
-This roadmap is deliberately honest about what is done, what is parked, and
-*why*. diego is past its initial feature push; the near-term focus is
-**stabilisation and evidence**, not new surface area.
+This roadmap is organized around a single product thesis: diego should be the
+most trustworthy way to measure the **read-only, standard-user blast radius**
+of an Active Directory environment. It is not a promise of invisibility and it
+is not an exploitation roadmap. Every phase is for authorised defensive
+assessment, with explicit evidence, safety controls, and reproducible results.
 
-## Completed — v0.3.0
+## Competitive strategy
 
-- ✅ LDAP/Kerberos/passive diagnostics and JSON/Markdown/HTML reports.
-- ✅ Baseline diff, confidence scoring, audit appendix, and JSON Schema.
-- ✅ Safe mode: hash material is redacted unless explicitly exported.
-- ✅ Cross-platform CI, dependency auditing, and crates.io publication.
+The market already has strong point solutions:
 
-## Now — v0.4.0
+| Alternative | Strength to respect | diego's target advantage |
+|---|---|---|
+| PingCastle | Broad AD health checks, maturity reporting, domain consolidation | A single Rust binary, stronger evidence lineage, safe-mode defaults, and deterministic machine-readable output |
+| BloodHound CE/Enterprise | Identity graph and attack-path exploration | A smaller, read-only exposure assessment that can run from an ordinary endpoint and explain findings without pretending to be a complete graph |
+| Purple Knight and similar auditors | Curated AD security checks and operator-friendly findings | Cross-platform offline operation, privacy-preserving reports, and tests that prove each detector against fixtures |
+| Continuous monitoring platforms | Ongoing change detection and enterprise workflow | A low-friction baseline and verification agent that can feed existing SIEM/ticketing workflows without requiring a SaaS control plane |
 
-The focus is reproducible evidence and a stable analysis boundary before adding
-more protocol surface area.
+The advantage must be demonstrated, not asserted. The primary scorecard is:
 
-- ✅ Add a synthetic, redacted LDAP JSON corpus and load-and-analyze regression tests.
-- ⏳ Exercise the LDAP fetch path with a lightweight mock server.
-- ⏳ Publish a reusable library scan API without weakening safe-mode guarantees.
-- ⏳ Validate runtime, memory, and query counts in a representative AD lab.
+- time from download to first useful report;
+- coverage of high-impact, standard-user-visible misconfigurations;
+- finding precision, confidence, and evidence completeness;
+- peak memory, query count, and network footprint in a published lab;
+- percentage of remediations verified by a later baseline;
+- zero secret leakage in audit-mode output.
 
-## Needs a lab environment (cannot be produced from this repo alone)
+## Phase 0 — Trust, scope, and release gate (v0.4.x)
 
-- **Real-environment evaluation.** Run against a representative forest
-  (e.g. Windows Server 2022, ~10k users, multi-domain) and fill in the results
-  table in [docs/BENCHMARKS.md](docs/BENCHMARKS.md) (runtime, peak RSS, query
-  counts). Methodology is already published; only numbers are pending.
-- **Reproduction corpus → live-path detection tests (v0.4.0).** Today
-  `tests/detection_tests.rs` calls `analyze::build_*` with hand-built
-  `LdapObject`s. To cover the full fetch→analyze path deterministically without
-  a live DC, in stages:
-  1. **Define a fixture format**: recorded/redacted LDAP responses as JSON
-     (`SearchEntry` → `LdapObject`), stored under `tests/corpus/`.
-  2. **Load-and-analyze tests**: read those fixtures and run them through
-     `analyze::build_*`, asserting findings — one step more realistic than the
-     current synthetic-object calls.
-  3. **(stretch) Lightweight mock LDAP server** so the filter/fetch side
-     (`queries.rs`) is exercised end-to-end too.
+**Goal:** make the existing feature set safe to evaluate and easy to trust.
 
-  Status: the **analysis** side and recorded JSON boundary are covered; the
-  fetch layer still needs a mock server and lab validation.
+- Finish the mock LDAP fetch path and representative AD lab validation.
+- Define a versioned finding contract: stable IDs, severity, confidence,
+  evidence, remediation, source attributes, and collection timestamp.
+- Make authorisation, read-only behaviour, safe mode, and detection assumptions
+  visible in CLI help and every report.
+- Add a threat-model review to every new detector; reject checks that require
+  privilege escalation, code execution, credential dumping, or exploit logic.
+- Publish benchmark methodology and reproducible redacted fixtures.
 
-## Future design (not yet — intentionally deferred)
+**Exit criteria:** all v0.4 findings have fixture coverage; audit-mode reports
+pass schema and secret-scanning tests; benchmark results are published; the CLI
+and report formats are stable enough for external users.
 
-- ✅ **Safe mode (`--mode audit` / `--export-hashes`).** Implemented in 0.3.0:
-  audit mode (the default) redacts crackable hash material from all report
-  formats; hash output requires explicit `--mode full --export-hashes`. MCP tool
-  responses are always audit-mode. See [docs/DESIGN-safe-mode.md](docs/DESIGN-safe-mode.md).
-- **GSSAPI / Kerberos bind.** `~/.diego/keytab` and TGT cache detection are
-  implemented (config.rs), but the LDAP layer still uses simple bind. Native
-  GSSAPI auth (via ldap3 SASL or libgssapi-krb5 bindings) is deferred — it
-  requires a cross-platform native-lib dependency that breaks the static musl
-  build. Target: after v0.4 lab validation once a rustls-compatible SASL path
-  is available.
-- **Plugin architecture.** Refactor detectors behind a `trait Detector` and a
-  `detectors/` directory once the detector count grows (it is ~13 today; this is
-  premature now). Lowers the barrier for external contributors.
-- **BloodHound export.** Requires first collecting object SIDs and full group
-  membership; a partial graph from current findings would mislead, so it stays
-  deferred. See THREAT_MODEL.md (Limitations).
-- **CIS "Mapped Controls".** Map findings to CIS / Microsoft Security Baseline /
-  MITRE ATT&CK as a partial, clearly-scoped mapping — not a full compliance
-  claim.
-- **Cloud identity** (Entra ID / AWS / GCP IAM): a possible long-term direction,
-  not committed.
+## Phase 1 — Evidence-first detection engine (v0.5)
+
+**Goal:** beat broad scanners on explainability and operator confidence.
+
+Status: core metadata and `--explain` support are implemented; detector
+expansion and mutation testing remain for follow-up releases.
+
+- Add stable finding IDs and evidence bundles with redaction by default.
+- ✅ Add detector metadata: required permissions, LDAP/Kerberos queries, expected
+  false positives, confidence rationale, and remediation references.
+- Expand read-only detectors for trusts, SID history, privileged group paths,
+  delegation variants, stale objects, password policy, and certificate-related
+  exposure where the data is available to a standard user.
+- Add deterministic fixture-driven tests, golden reports, and mutation tests for
+  parser boundaries and unsafe inputs.
+- ✅ Support `--explain <finding-id>` so an operator can trace finding → evidence →
+  remediation without reading source code.
+
+**Exit criteria:** every finding is traceable to evidence; no detector silently
+falls back to an unsupported assumption; regression tests cover malformed and
+partial directory data.
+
+## Phase 2 — Exposure graph, without misleading completeness (v0.6)
+
+**Goal:** provide useful prioritisation between a flat audit and a full graph
+platform.
+
+- Collect only the object identifiers and relationships needed to connect
+  diego's own findings; document the exact graph boundary.
+- Generate a bounded “why this matters” exposure chain from the current user
+  context to protected groups, clearly labelled as an assessment path rather
+  than an exploit path.
+- Export an explicitly scoped interoperability format for downstream graph
+  tools; never advertise a partial export as a full BloodHound replacement.
+- Add remediation simulation: show which findings disappear when a selected
+  control is corrected, without changing the directory.
+
+**Exit criteria:** path explanations are reproducible from the same input;
+incomplete data is surfaced; graph output contains provenance and privacy
+controls; no active exploitation or lateral movement is added.
+
+## Phase 3 — Baseline, verification, and drift (v0.7)
+
+**Goal:** turn a one-time assessment into measurable risk reduction.
+
+- Version and sign baseline snapshots; support encrypted export for transfer.
+- Add baseline diff with suppression rationale, expiry, owner, and ticket ID.
+- Add “fixed / regressed / unknown” verification and remediation SLAs.
+- Provide scheduled, operator-controlled runs through the host's normal task
+  scheduler; keep collection read-only and document expected DC telemetry.
+- Emit compact JSON suitable for SIEM, CI, and ticketing ingestion.
+
+**Exit criteria:** a team can run recurring assessments, identify real drift,
+verify a fix, and retain an auditable history without a cloud dependency.
+
+## Phase 4 — Deployment and integration moat (v0.8)
+
+**Goal:** make diego cheaper to adopt than a larger platform.
+
+- Ship signed, reproducible Windows and Linux binaries plus a static Linux
+  artifact where dependencies allow it.
+- Provide offline operation, proxy/TLS configuration, least-data collection,
+  and documented air-gapped transfer workflows.
+- Stabilise the library API and MCP interface with capability discovery and
+  audit-mode guarantees.
+- Add integrations for generic webhooks, SARIF, and common SIEM ingestion;
+  keep vendor-specific adapters optional and narrowly scoped.
+- Publish a support matrix for AD versions, trusts, TLS modes, and failure
+  behaviour.
+
+**Exit criteria:** installation, authentication, scan, report, and export work
+in a disconnected lab; integrations are contract-tested; upgrade and rollback
+procedures are documented.
+
+## Phase 5 — Validation and ecosystem (v0.9 / 1.0)
+
+**Goal:** convert technical differentiation into credible adoption.
+
+- Run an independent review of protocol handling, secret lifecycle, and report
+  redaction.
+- Publish a benchmark against representative forest sizes, with query counts,
+  runtime, memory, and finding agreement—not marketing-only scores.
+- Publish detector contribution guidelines and a reviewed extension API.
+- Map findings to CIS, Microsoft security baselines, and MITRE ATT&CK with
+  scope and confidence labels; do not claim compliance certification.
+- Establish a public compatibility and release policy, including deprecation
+  rules for report schemas.
+
+**1.0 exit criteria:** reproducible release artifacts, independent security
+review completed, documented performance envelope, stable schema/API policy,
+and a measured remediation workflow from baseline to verified closure.
+
+## Deferred until the core moat is proven
+
+- Native GSSAPI LDAP bind if it can be delivered without sacrificing the
+  cross-platform/static build target.
+- Entra ID or other cloud identity providers after on-premises AD coverage and
+  data-boundary controls are mature.
+- A plugin architecture after the detector contract is stable and there is a
+  demonstrated contributor need.
+- Full BloodHound-compatible graph collection, because partial graph data can
+  create false confidence.
 
 ## Non-goals
 
-See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md): diego is not an exploitation
-framework, not a detection-evasion guarantee, and not a full graph collector.
+diego will not become an exploitation framework, credential-dumping tool,
+lateral-movement tool, persistence mechanism, or detection-evasion guarantee.
+It will not run commands on target hosts, crack captured hashes, or make
+unauthorised changes to Active Directory.

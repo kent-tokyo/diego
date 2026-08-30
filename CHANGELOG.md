@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-30
+
+### Added
+- Detector metadata for required permissions, collection source, expected
+  false positives, and confidence rationale.
+- `--explain <finding-id>` for safe, operator-facing evidence provenance and
+  remediation details.
+
+### Changed
+- Finding explanations use the same audit-mode redaction boundary as reports.
+
 ## [0.4.0] - 2026-08-30
 
 ### Added
@@ -107,6 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   LDAP enumeration, LLMNR/NBT-NS passive monitoring, Claude API analysis, and
   MCP server mode.
 
+[0.5.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.5.0
 [0.4.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.3.0
 [0.2.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.2.0

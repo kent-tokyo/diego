@@ -71,6 +71,14 @@ async fn main() -> anyhow::Result<()> {
         report = report.with_diff(d);
     }
 
+    if let Some(finding_id) = &config.explain {
+        match report.findings.iter().find(|finding| finding.id.eq_ignore_ascii_case(finding_id)) {
+            Some(finding) => println!("{}", report::explain::render(finding)),
+            None => return Err(anyhow::anyhow!("Finding ID not present in this scan: {}", finding_id)),
+        }
+        return Ok(());
+    }
+
     // ── AI analysis ───────────────────────────────────────────────────────────
     if config.ai_analyze {
         match ai::ClaudeClient::new(None, Some(config.ai_model.clone())) {

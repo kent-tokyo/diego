@@ -1,4 +1,5 @@
 pub mod diff;
+pub mod explain;
 pub mod html;
 pub mod json;
 pub mod markdown;

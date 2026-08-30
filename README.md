@@ -120,6 +120,7 @@ diego [OPTIONS]
 | `--output <OUTPUT>` | `stdout` | Output file path |
 | `--format <FORMAT>` | `json` | Output format: `json`, `markdown`, or `html` |
 | `--baseline <PATH>` | — | Prior diego JSON report to diff against (shows new / resolved / severity-changed findings) |
+| `--explain <FINDING_ID>` | — | Explain a finding's detector, evidence provenance, confidence, and remediation |
 | `--timeout <TIMEOUT>` | `10` | Per-query timeout in seconds |
 | `--interface <INTERFACE>` | Auto-detect | Network interface for passive listening |
 | `--ai-model <AI_MODEL>` | `claude-sonnet-4-6` | Claude model for analysis |

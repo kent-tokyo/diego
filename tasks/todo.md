@@ -168,7 +168,9 @@
 - Advanced LDAP queries
 - Full integration tests
 
-**v0.4.0** (Current release)
+**v0.5.0** (Current release)
+- Evidence provenance metadata
+- `--explain <finding-id>` operator workflow
 - Static binary (musl)
 - CI/CD pipeline
 - AES Kerberoasting

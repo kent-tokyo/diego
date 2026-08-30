@@ -76,6 +76,10 @@ pub struct Cli {
     #[arg(long)]
     pub export_hashes: bool,
 
+    /// Explain one finding ID after the scan, including evidence provenance
+    #[arg(long, value_name = "FINDING_ID")]
+    pub explain: Option<String>,
+
     // ── MCP mode ─────────────────────────────────────────────────────────────
 
     /// Run as an MCP (Model Context Protocol) server over stdio
@@ -128,6 +132,7 @@ pub struct Config {
     // Safe mode
     pub mode: RunMode,
     pub export_hashes: bool,
+    pub explain: Option<String>,
     // MCP
     pub mcp: bool,
 }
@@ -197,6 +202,7 @@ impl Config {
             ai_model: cli.ai_model,
             mode: cli.mode,
             export_hashes: cli.export_hashes,
+            explain: cli.explain,
             mcp: cli.mcp,
         })
     }

@@ -621,6 +621,7 @@ fn build_minimal_config(
         ai_model: crate::ai::claude::DEFAULT_MODEL.to_string(),
         mode: crate::config::RunMode::Audit,
         export_hashes: false,
+        explain: None,
         mcp: false,
     })
 }
