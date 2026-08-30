@@ -168,7 +168,7 @@
 - Advanced LDAP queries
 - Full integration tests
 
-**v0.3.0** (Future)
+**v0.4.0** (Current release)
 - Static binary (musl)
 - CI/CD pipeline
 - AES Kerberoasting

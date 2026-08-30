@@ -1,0 +1,61 @@
+[
+  {
+    "dn": "CN=svc_backup,OU=Service Accounts,DC=corp,DC=local",
+    "attrs": {
+      "sAMAccountName": ["svc_backup"],
+      "userAccountControl": ["4194304"],
+      "pwdLastSet": ["132539328000000000"],
+      "servicePrincipalName": ["MSSQLSvc/db01.corp.local:1433"],
+      "msDS-SupportedEncryptionTypes": ["0"],
+      "adminCount": ["1"],
+      "description": ["password=REDACTED-FIXTURE-VALUE"]
+    }
+  },
+  {
+    "dn": "CN=svc_web,OU=Service Accounts,DC=corp,DC=local",
+    "attrs": {
+      "sAMAccountName": ["svc_web"],
+      "servicePrincipalName": ["HTTP/app01.corp.local"],
+      "msDS-SupportedEncryptionTypes": ["24"],
+      "adminCount": ["0"]
+    }
+  },
+  {
+    "dn": "CN=WS-DELEG,OU=Computers,DC=corp,DC=local",
+    "attrs": {
+      "cn": ["WS-DELEG"],
+      "dnsHostName": ["ws-deleg.corp.local"],
+      "operatingSystem": ["Windows Server 2022"]
+    }
+  },
+  {
+    "dn": "CN=svc_frontend,OU=Service Accounts,DC=corp,DC=local",
+    "attrs": {
+      "sAMAccountName": ["svc_frontend"],
+      "userAccountControl": ["16777216"],
+      "msDS-AllowedToDelegateTo": ["ldap/dc01.corp.local"]
+    }
+  },
+  {
+    "dn": "CN=APP01,OU=Computers,DC=corp,DC=local",
+    "attrs": {
+      "cn": ["APP01"],
+      "dnsHostName": ["app01.corp.local"],
+      "msDS-AllowedToActOnBehalfOfOtherIdentity": ["REDACTED-FIXTURE-SECURITY-DESCRIPTOR"]
+    }
+  },
+  {
+    "dn": "CN=corp,DC=corp,DC=local",
+    "attrs": {
+      "minPwdLength": ["7"],
+      "lockoutThreshold": ["0"],
+      "lockoutDuration": ["18000000000"]
+    }
+  },
+  {
+    "dn": "CN=alice,DC=corp,DC=local",
+    "attrs": {
+      "sAMAccountName": ["alice"]
+    }
+  }
+]

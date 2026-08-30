@@ -2,7 +2,7 @@ name: Release
 
 # Tag-triggered release: builds the static Linux (musl) and Windows binaries and
 # attaches them to a GitHub Release. Cut a release by pushing a tag, e.g.:
-#   git tag v0.3.0 && git push origin v0.3.0
+#   git tag v0.4.0 && git push origin v0.4.0
 
 on:
   push:

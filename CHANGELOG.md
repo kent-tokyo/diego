@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-30
+
+### Added
+- Reusable `diego::run_scan` library API with the same module orchestration as
+  the CLI and safe-mode redaction at the API boundary.
+- Synthetic, redacted LDAP JSON corpus and load-and-analyze regression tests.
+
+### Changed
+- CLI scan orchestration now uses the public library API, preventing drift
+  between embedded and command-line usage.
+- Roadmap now tracks v0.4.0 evidence and lab-validation milestones.
+
 ## [0.3.0] - 2026-08-30
 
 ### Added
@@ -95,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   LDAP enumeration, LLMNR/NBT-NS passive monitoring, Claude API analysis, and
   MCP server mode.
 
+[0.4.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.3.0
 [0.2.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.2.0
 [0.1.1]: https://github.com/kent-tokyo/diego/releases/tag/v0.1.1

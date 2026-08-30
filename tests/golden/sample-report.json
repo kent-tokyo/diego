@@ -1,6 +1,6 @@
 {
   "tool": "diego",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "domain": "corp.local",
   "generated_at": "<normalized>",
   "scan_context": {

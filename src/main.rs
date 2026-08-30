@@ -4,15 +4,10 @@ use std::time::Instant;
 use clap::Parser;
 
 use diego::ai;
-use diego::config::{Cli, Config, ModuleKind, RunMode};
+use diego::config::{Cli, Config};
 use diego::mcp;
-use diego::modules::{
-    kerberos::KerberosModule,
-    ldap::{run_ldap_and_extract_context, LdapModule},
-    passive::PassiveModule,
-    DiagnosticModule, LdapContext,
-};
-use diego::report::{self, make_scan_context, Report};
+use diego::run_scan;
+use diego::report::{self, Report};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -48,91 +43,10 @@ async fn main() -> anyhow::Result<()> {
 
     // ── CLI scan mode ─────────────────────────────────────────────────────────
     let config = Arc::new(Config::from_cli(cli)?);
-    let start = Instant::now();
-
     eprintln!("[+] diego v{} — target: {} ({})", env!("CARGO_PKG_VERSION"), config.domain, config.dc_ip);
     eprintln!("[+] Modules: {:?}", config.modules);
-
-    let mut all_findings = Vec::new();
-    let mut modules_run: Vec<String> = Vec::new();
-
-    // ── LDAP: always runs first (feeds Kerberos) ──────────────────────────────
-    let ldap_ctx: LdapContext;
-
-    if config.modules.contains(&ModuleKind::Ldap) || config.modules.contains(&ModuleKind::Kerberos) {
-        eprintln!("[*] Running LDAP module");
-        modules_run.push("ldap".into());
-
-        match run_ldap_and_extract_context(Arc::clone(&config)).await {
-            Ok((_unused, ctx)) => {
-                if config.modules.contains(&ModuleKind::Ldap) {
-                    let ldap_mod = LdapModule::new();
-                    match ldap_mod.run(Arc::clone(&config)).await {
-                        Ok(f) => all_findings.extend(f),
-                        Err(e) => eprintln!("[!] LDAP module error: {}", e),
-                    }
-                }
-                ldap_ctx = ctx;
-            }
-            Err(e) => {
-                eprintln!("[!] LDAP context extraction failed: {}", e);
-                ldap_ctx = LdapContext { asrep_candidates: vec![], spn_accounts: vec![] };
-            }
-        }
-    } else {
-        ldap_ctx = LdapContext { asrep_candidates: vec![], spn_accounts: vec![] };
-    }
-
-    // ── Kerberos + Passive: run concurrently ──────────────────────────────────
-    let run_kerberos = config.modules.contains(&ModuleKind::Kerberos);
-    let run_passive  = config.modules.contains(&ModuleKind::Passive);
-
-    match (run_kerberos, run_passive) {
-        (true, true) => {
-            eprintln!("[*] Running Kerberos + Passive modules (concurrent)");
-            modules_run.push("kerberos".into());
-            modules_run.push("passive".into());
-            let kerb_mod    = KerberosModule::new(ldap_ctx);
-            let passive_mod = PassiveModule::new();
-            let (kr, pr) = tokio::join!(
-                kerb_mod.run(Arc::clone(&config)),
-                passive_mod.run(Arc::clone(&config)),
-            );
-            if let Ok(f) = kr { all_findings.extend(f); } else if let Err(e) = kr { eprintln!("[!] Kerberos error: {}", e); }
-            if let Ok(f) = pr { all_findings.extend(f); } else if let Err(e) = pr { eprintln!("[!] Passive error: {}", e); }
-        }
-        (true, false) => {
-            eprintln!("[*] Running Kerberos module");
-            modules_run.push("kerberos".into());
-            let kerb_mod = KerberosModule::new(ldap_ctx);
-            match kerb_mod.run(Arc::clone(&config)).await {
-                Ok(f)  => all_findings.extend(f),
-                Err(e) => eprintln!("[!] Kerberos error: {}", e),
-            }
-        }
-        (false, true) => {
-            eprintln!("[*] Running Passive module");
-            modules_run.push("passive".into());
-            let passive_mod = PassiveModule::new();
-            match passive_mod.run(Arc::clone(&config)).await {
-                Ok(f)  => all_findings.extend(f),
-                Err(e) => eprintln!("[!] Passive error: {}", e),
-            }
-        }
-        (false, false) => {}
-    }
-
-    // ── Build report ──────────────────────────────────────────────────────────
-    let scan_ctx = make_scan_context(&config, modules_run, start);
-    let mut report = Report::new(scan_ctx, all_findings);
-
-    // Keep the same redaction boundary for AI/chat as for file/stdout output.
-    // Raw hashes are only retained when both explicit full-mode flags are set.
-    if !(config.mode == RunMode::Full && config.export_hashes) {
-        for finding in &mut report.findings {
-            report::redact_evidence(&mut finding.evidence);
-        }
-    }
+    let start = Instant::now();
+    let mut report = run_scan(Arc::clone(&config)).await?;
 
     eprintln!(
         "[+] Scan complete ({:.1}s): {} findings ({} Critical, {} High, {} Medium)",

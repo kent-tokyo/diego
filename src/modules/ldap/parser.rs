@@ -4,7 +4,13 @@ use ldap3::SearchEntry;
 
 use crate::modules::SpnAccount;
 
-#[derive(Debug, Clone)]
+/// A serializable snapshot of the LDAP attributes used by diego's analyzers.
+///
+/// The JSON representation is intentionally small and redacted: it records
+/// only string-valued attributes returned by the read-only LDAP queries. This
+/// makes corpus fixtures useful for regression tests without requiring a live
+/// domain controller or storing binary security descriptors.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct LdapObject {
     pub dn: String,
     pub attrs: HashMap<String, Vec<String>>,
