@@ -22,7 +22,7 @@ pub fn md4(msg: &[u8]) -> [u8; 16] {
     let mut c: u32 = 0x98BA_DCFE;
     let mut d: u32 = 0x1032_5476;
 
-    for blk in p.chunks_exact(64) {
+    for blk in p.as_chunks::<64>().0 {
         // Load message words
         let w0  = u32::from_le_bytes([blk[ 0],blk[ 1],blk[ 2],blk[ 3]]);
         let w1  = u32::from_le_bytes([blk[ 4],blk[ 5],blk[ 6],blk[ 7]]);
