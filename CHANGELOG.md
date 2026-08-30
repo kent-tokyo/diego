@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-08-31
+
+### Added
+- Added deterministic defensive attack-path output via `--attack-path` in JSON or Markdown.
+- Added `diego.attack-path.v1` contract coverage with explicit standard-user and protected-asset boundaries.
+
+### Changed
+- Rewrote the README files to match the current CLI, report, baseline, governance,
+  SARIF, webhook, exposure-graph, and MCP implementations.
+- Removed obsolete stealth/attack-narrative wording and shortened operator docs.
+
+### Removed
+- Removed internal agent instructions, task notes, and the superseded safe-mode
+  design sketch from the public repository.
+
 ## [0.13.0] - 2026-08-30
 
 ### Added
@@ -23,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.0] - 2026-08-30
 
 ### Added
-- SARIF 2.1.0 sidecar output via `--sarif <path>` for CI and security-platform ingestion.
+- SARIF 2.1.0 sidecar output via `--sarif-output <path>` for CI and security-platform ingestion.
 - Typed Finding-to-SARIF mapping with severity, confidence, MITRE ID, timestamps, and remediation guidance.
 - Contract tests ensuring SARIF output preserves audit-mode boundaries and omits raw evidence.
 
@@ -108,8 +123,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   posture, removing residual "post-exploitation" wording so it matches the
   tagline.
 - Added `docs/TESTING.md` (golden / detection / integration / schema test layers
-  and what each does **not** guard) and `docs/DESIGN-safe-mode.md` (the safety
-  contract for defensive-by-default `--mode audit` / `--export-hashes`).
+  and what each does **not** guard). The safe-mode contract is now maintained
+  in the CLI and report implementation.
 - ROADMAP: expanded the reproduction-corpus item into concrete staged milestones
   (fixture format → load-and-analyze tests → mock LDAP) and listed safe mode.
 
@@ -177,6 +192,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.10.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.10.0
 [0.12.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.12.0
 [0.13.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.13.0
+[0.14.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.14.0
 [0.5.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.5.0
 [0.4.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.3.0

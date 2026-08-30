@@ -191,6 +191,12 @@ fn domain_to_base_dn(domain: &str) -> String {
     domain.split('.').map(|p| format!("DC={}", p)).collect::<Vec<_>>().join(",")
 }
 
+const TRUSTED_TO_AUTH_FOR_DELEGATION: u32 = 0x1000000;
+
+fn has_protocol_transition(uac: u32) -> bool {
+    uac & TRUSTED_TO_AUTH_FOR_DELEGATION != 0
+}
+
 // ─── Tool implementations ─────────────────────────────────────────────────────
 
 async fn enumerate_asrep_candidates(args: &Value) -> anyhow::Result<Value> {
@@ -454,7 +460,9 @@ async fn mcp_constrained_delegation(args: &Value) -> anyhow::Result<Value> {
                 "account": name,
                 "dn": o.dn,
                 "delegation_targets": targets,
-                "protocol_transition": uac & 0x100000 != 0,
+                // TRUSTED_TO_AUTH_FOR_DELEGATION (T2A4D) is bit 24.
+                // 0x100000 is NOT_DELEGATED (bit 20) and must not be used here.
+                "protocol_transition": has_protocol_transition(uac),
             }))
         })
         .collect();
@@ -628,6 +636,7 @@ fn build_minimal_config(
         governance_output: None,
         sarif_output: None,
         webhook_output: None,
+        attack_path: false,
         mcp: false,
     })
 }
@@ -865,6 +874,12 @@ mod tests {
         let config = build_minimal_config("1.1.1.1", "test.local", "u", "p", 5).unwrap();
         assert!(!config.modules.is_empty(), "Should have modules configured");
         assert!(config.modules.len() >= 2, "Should have at least LDAP and Kerberos");
+    }
+
+    #[test]
+    fn test_protocol_transition_uses_t2a4d_bit() {
+        assert!(!has_protocol_transition(0x100000));
+        assert!(has_protocol_transition(TRUSTED_TO_AUTH_FOR_DELEGATION));
     }
 
     // ─── Phase 6: Dispatch and Tool Matching Tests ─────────────────────

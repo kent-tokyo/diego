@@ -74,8 +74,12 @@ async fn main() -> anyhow::Result<()> {
         }
         let fleet = FleetReport::new(&plan, results);
         let json = serde_json::to_string_pretty(&fleet)?;
-        if let Some(output) = &cli.output { std::fs::write(output, &json)?; }
-        println!("{}", json);
+        if let Some(output) = &cli.output {
+            std::fs::write(output, &json)?;
+            eprintln!("[+] Fleet report written to {}", output.display());
+        } else {
+            println!("{}", json);
+        }
         return Ok(());
     }
 
@@ -139,6 +143,15 @@ async fn main() -> anyhow::Result<()> {
     if let Some(path) = &config.webhook_output {
         std::fs::write(path, report::webhook::generate(&report)?)?;
         eprintln!("[+] Webhook event written to {}", path.display());
+    }
+
+    if config.attack_path {
+        let output = match config.format {
+            diego::config::ReportFormat::Markdown => report::attack_path::generate_markdown(&report),
+            _ => report::attack_path::generate_json(&report)?,
+        };
+        println!("{}", output);
+        return Ok(());
     }
 
     if config.exposure_graph {

@@ -103,6 +103,10 @@ pub struct Cli {
     #[arg(long)]
     pub webhook_output: Option<PathBuf>,
 
+    /// Emit the bounded defensive attack-path summary as JSON or Markdown
+    #[arg(long)]
+    pub attack_path: bool,
+
     /// JSON multi-domain execution plan (credentials remain CLI/env supplied)
     #[arg(long)]
     pub plan: Option<PathBuf>,
@@ -166,6 +170,7 @@ pub struct Config {
     pub governance_output: Option<PathBuf>,
     pub sarif_output: Option<PathBuf>,
     pub webhook_output: Option<PathBuf>,
+    pub attack_path: bool,
     // MCP
     pub mcp: bool,
 }
@@ -242,6 +247,7 @@ impl Config {
             governance_output: cli.governance_output,
             sarif_output: cli.sarif_output,
             webhook_output: cli.webhook_output,
+            attack_path: cli.attack_path,
             mcp: cli.mcp,
         })
     }
