@@ -8,6 +8,7 @@ use diego::config::{Cli, Config};
 use diego::mcp;
 use diego::run_scan;
 use diego::report::{self, Report};
+use diego::report::fleet::{FleetReport, ScanPlan, TargetResult};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -38,6 +39,42 @@ async fn main() -> anyhow::Result<()> {
         eprintln!("[+] Add the above JSON to your Claude Desktop config file:");
         eprintln!("    macOS: ~/Library/Application Support/Claude/claude_desktop_config.json");
         eprintln!("    Windows: %APPDATA%\\Claude\\claude_desktop_config.json");
+        return Ok(());
+    }
+
+    // ── Multi-domain plan mode ───────────────────────────────────────────────
+    if let Some(plan_path) = &cli.plan {
+        let data = std::fs::read_to_string(plan_path)
+            .map_err(|e| anyhow::anyhow!("Failed to read scan plan {}: {}", plan_path.display(), e))?;
+        let plan: ScanPlan = serde_json::from_str(&data)
+            .map_err(|e| anyhow::anyhow!("Failed to parse scan plan {}: {}", plan_path.display(), e))?;
+        plan.validate()?;
+        let username = cli.username.as_ref().ok_or_else(|| anyhow::anyhow!("--username is required with --plan"))?;
+        if cli.password.is_none() && std::env::var("DIEGO_PASSWORD").is_err() {
+            return Err(anyhow::anyhow!("--password or DIEGO_PASSWORD is required with --plan"));
+        }
+        eprintln!("[+] Executing {} selected target(s) sequentially (scope: {})", plan.selected_targets().len(), plan.scope);
+        let mut results = Vec::new();
+        for target in plan.selected_targets() {
+            let mut target_cli = cli.clone();
+            target_cli.plan = None;
+            target_cli.mcp = false;
+            target_cli.dc = Some(target.dc.clone());
+            target_cli.domain = Some(target.domain.clone());
+            target_cli.username = Some(username.clone());
+            let result = match Config::from_cli(target_cli) {
+                Ok(config) => match run_scan(Arc::new(config)).await {
+                    Ok(report) => TargetResult { id: target.id, domain: target.domain, dc: target.dc, status: "completed".into(), report: Some(report), error: None },
+                    Err(error) => TargetResult { id: target.id, domain: target.domain, dc: target.dc, status: "failed".into(), report: None, error: Some(error.to_string()) },
+                },
+                Err(error) => TargetResult { id: target.id, domain: target.domain, dc: target.dc, status: "failed".into(), report: None, error: Some(error.to_string()) },
+            };
+            results.push(result);
+        }
+        let fleet = FleetReport::new(&plan, results);
+        let json = serde_json::to_string_pretty(&fleet)?;
+        if let Some(output) = &cli.output { std::fs::write(output, &json)?; }
+        println!("{}", json);
         return Ok(());
     }
 

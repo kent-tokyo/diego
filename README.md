@@ -123,11 +123,26 @@ diego [OPTIONS]
 | `--explain <FINDING_ID>` | — | Explain a finding's detector, evidence provenance, confidence, and remediation |
 | `--exposure-graph` | — | Emit a bounded, provenance-preserving exposure graph as JSON |
 | `--simulate-remediation <FINDING_IDS>` | — | Simulate removing comma-separated findings without changing the directory |
+| `--plan <PATH>` | — | Execute a credential-free multi-domain JSON plan |
 | `--timeout <TIMEOUT>` | `10` | Per-query timeout in seconds |
 | `--interface <INTERFACE>` | Auto-detect | Network interface for passive listening |
 | `--ai-model <AI_MODEL>` | `claude-sonnet-4-6` | Claude model for analysis |
 
 ### Examples
+
+#### Multi-domain execution plan (v0.7)
+
+```bash
+diego --plan docs/sample-scan-plan.json \
+  --username jdoe --password "$DIEGO_PASSWORD" \
+  --modules ldap --output fleet.json
+```
+
+The plan contains target metadata only. Targets are executed sequentially in
+v0.7 so query volume remains predictable. The JSON `FleetReport` preserves each
+target's status, completed report or error, requested scope, and aggregate
+severity counts. Scope is explicit metadata; trust and forest membership are
+not inferred from the plan file.
 
 #### 1. Full Scan (All Modules)
 

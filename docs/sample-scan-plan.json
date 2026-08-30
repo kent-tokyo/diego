@@ -1,0 +1,10 @@
+{
+  "version": "1",
+  "scope": "forest",
+  "max_parallel": 1,
+  "exclude_domains": ["legacy.corp.example"],
+  "targets": [
+    {"id": "root", "domain": "corp.example", "dc": "10.0.0.1", "enabled": true},
+    {"id": "child", "domain": "child.corp.example", "dc": "10.0.0.2", "enabled": true}
+  ]
+}

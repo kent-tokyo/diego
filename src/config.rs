@@ -6,22 +6,22 @@ use std::io::{self, Write};
 use clap::Parser;
 use zeroize::Zeroizing;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(
     name = "diego",
     about = "Domain Intranet Elusive Guardian & Offensive-Scouter\nNon-privileged Active Directory security diagnostic agent"
 )]
 pub struct Cli {
     /// Domain Controller IP address (required for CLI mode)
-    #[arg(long, required_unless_present = "mcp")]
+    #[arg(long)]
     pub dc: Option<String>,
 
     /// Domain name (e.g. corp.local)
-    #[arg(long, required_unless_present = "mcp")]
+    #[arg(long)]
     pub domain: Option<String>,
 
     /// Username for authentication
-    #[arg(long, required_unless_present = "mcp")]
+    #[arg(long)]
     pub username: Option<String>,
 
     /// Password for authentication
@@ -87,6 +87,10 @@ pub struct Cli {
     /// Simulate remediation by comma-separated finding IDs (no directory changes)
     #[arg(long, value_name = "FINDING_IDS")]
     pub simulate_remediation: Option<String>,
+
+    /// JSON multi-domain execution plan (credentials remain CLI/env supplied)
+    #[arg(long)]
+    pub plan: Option<PathBuf>,
 
     // ── MCP mode ─────────────────────────────────────────────────────────────
 
