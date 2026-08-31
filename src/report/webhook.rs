@@ -3,7 +3,7 @@
 //! This module creates a local, transport-neutral payload. It excludes finding
 //! evidence and crackable material so delivery remains under operator control.
 
-use super::{Report, Severity};
+use super::{Report, Severity, diff::DiffEntry};
 use serde::Serialize;
 
 const EVENT_SCHEMA: &str = "diego.scan.completed.v1";
@@ -54,7 +54,7 @@ struct WebhookBaseline {
 
 /// Generate a transport-neutral event without copying report evidence.
 pub fn generate(report: &Report) -> anyhow::Result<String> {
-    let findings = report
+    let mut findings: Vec<WebhookFinding> = report
         .findings
         .iter()
         .map(|finding| WebhookFinding {
@@ -64,6 +64,9 @@ pub fn generate(report: &Report) -> anyhow::Result<String> {
             baseline_state: state_for(report, &finding.id),
         })
         .collect();
+    if let Some(diff) = &report.diff {
+        findings.extend(diff.resolved.iter().map(resolved_finding));
+    }
     let baseline = report.diff.as_ref().map(|diff| WebhookBaseline {
         baseline_generated_at: diff.baseline_generated_at.to_rfc3339(),
         new: diff.new.len(),
@@ -92,6 +95,15 @@ pub fn generate(report: &Report) -> anyhow::Result<String> {
     .map_err(Into::into)
 }
 
+fn resolved_finding(entry: &DiffEntry) -> WebhookFinding {
+    WebhookFinding {
+        id: entry.id.clone(),
+        title: entry.title.clone(),
+        severity: entry.severity.clone(),
+        baseline_state: "absent",
+    }
+}
+
 fn state_for(report: &Report, id: &str) -> &'static str {
     let Some(diff) = &report.diff else {
         return "current";
@@ -116,10 +128,19 @@ mod tests {
             serde_json::from_str(&generate(&sample_report()).unwrap()).unwrap();
         assert_eq!(value["schema"], EVENT_SCHEMA);
         assert_eq!(value["event"], "scan.completed");
-        assert_eq!(value["findings"].as_array().unwrap().len(), 5);
+        assert_eq!(value["findings"].as_array().unwrap().len(), 6);
         assert_eq!(value["baseline"]["new"], 3);
         assert_eq!(value["baseline"]["resolved"], 1);
         assert_eq!(value["findings"][0]["baselineState"], "unchanged");
+        assert_eq!(
+            value["findings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|finding| finding["id"] == "LDAP-OLD-RESOLVED")
+                .unwrap()["baselineState"],
+            "absent"
+        );
         let encoded = serde_json::to_string(&value).unwrap();
         assert!(!encoded.contains("evidence"));
         assert!(!encoded.contains("hashcat_hash"));

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-31
+
+### Added
+- Webhook/SIEM events now include resolved baseline findings with `baselineState: absent` for lifecycle-complete triage.
+- Added contract coverage for current and resolved event records without raw evidence.
+
 ## [0.14.0] - 2026-08-31
 
 ### Added
@@ -193,6 +199,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.12.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.12.0
 [0.13.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.13.0
 [0.14.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.14.0
+[0.15.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.15.0
 [0.5.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.5.0
 [0.4.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.3.0
