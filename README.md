@@ -149,7 +149,9 @@ target's status, completed report or error, requested scope, and aggregate
 severity counts. Completed targets also include a bounded `attackPath` summary
 derived from Critical/High finding hints; it contains no raw evidence and is
 omitted when a target fails. Scope is explicit metadata; trust and forest
-membership are not inferred from the plan file.
+membership are not inferred from the plan file. The `execution` object records
+selected, completed, failed targets, and local elapsed milliseconds; it does not
+claim directory-wide coverage.
 
 #### Local remediation assessment (v0.8)
 

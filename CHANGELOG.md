@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-08-31
+
+### Added
+- Added bounded FleetReport execution metrics for selected, completed, and failed targets plus elapsed milliseconds.
+- Added offline contract coverage for fleet execution-state accounting.
+
 ## [0.17.0] - 2026-08-31
 
 ### Added

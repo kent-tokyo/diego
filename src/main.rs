@@ -52,6 +52,7 @@ async fn main() -> anyhow::Result<()> {
             anyhow::anyhow!("Failed to parse scan plan {}: {}", plan_path.display(), e)
         })?;
         plan.validate()?;
+        let plan_started = Instant::now();
         let username = cli
             .username
             .as_ref()
@@ -110,7 +111,11 @@ async fn main() -> anyhow::Result<()> {
             };
             results.push(result);
         }
-        let fleet = FleetReport::new(&plan, results);
+        let fleet = FleetReport::with_duration(
+            &plan,
+            results,
+            plan_started.elapsed().as_millis().min(u64::MAX as u128) as u64,
+        );
         let json = serde_json::to_string_pretty(&fleet)?;
         if let Some(output) = &cli.output {
             std::fs::write(output, &json)?;

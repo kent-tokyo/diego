@@ -48,6 +48,18 @@ pub struct FleetReport {
     pub generated_at: DateTime<Utc>,
     pub results: Vec<TargetResult>,
     pub summary: Summary,
+    pub execution: FleetExecution,
+}
+
+/// Bounded local execution metrics for a fleet run. These are operational
+/// measurements, not estimates of directory size or network-wide coverage.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FleetExecution {
+    pub selected_targets: usize,
+    pub completed_targets: usize,
+    pub failed_targets: usize,
+    pub duration_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,6 +129,14 @@ impl ScanPlan {
 
 impl FleetReport {
     pub fn new(plan: &ScanPlan, results: Vec<TargetResult>) -> Self {
+        Self::with_duration(plan, results, 0)
+    }
+
+    pub fn with_duration(
+        plan: &ScanPlan,
+        results: Vec<TargetResult>,
+        duration_ms: u64,
+    ) -> Self {
         let mut summary = Summary {
             critical: 0,
             high: 0,
@@ -125,6 +145,14 @@ impl FleetReport {
             info: 0,
             total: 0,
         };
+        let completed_targets = results
+            .iter()
+            .filter(|result| result.status == "completed")
+            .count();
+        let failed_targets = results
+            .iter()
+            .filter(|result| result.status == "failed")
+            .count();
         for result in &results {
             if let Some(report) = &result.report {
                 summary.critical += report.summary.critical;
@@ -143,6 +171,12 @@ impl FleetReport {
             generated_at: Utc::now(),
             results,
             summary,
+            execution: FleetExecution {
+                selected_targets: completed_targets + failed_targets,
+                completed_targets,
+                failed_targets,
+                duration_ms,
+            },
         }
     }
 }
@@ -226,5 +260,34 @@ mod tests {
         };
         let failed_json = serde_json::to_value(failed).unwrap();
         assert!(failed_json.get("attackPath").is_none());
+    }
+
+    #[test]
+    fn execution_metrics_count_result_states() {
+        let results = vec![
+            TargetResult {
+                id: "ok".into(),
+                domain: "corp.example".into(),
+                dc: "10.0.0.1".into(),
+                status: "completed".into(),
+                report: None,
+                attack_path: None,
+                error: None,
+            },
+            TargetResult {
+                id: "bad".into(),
+                domain: "child.corp.example".into(),
+                dc: "10.0.0.2".into(),
+                status: "failed".into(),
+                report: None,
+                attack_path: None,
+                error: Some("offline".into()),
+            },
+        ];
+        let fleet = FleetReport::with_duration(&plan(), results, 42);
+        assert_eq!(fleet.execution.selected_targets, 2);
+        assert_eq!(fleet.execution.completed_targets, 1);
+        assert_eq!(fleet.execution.failed_targets, 1);
+        assert_eq!(fleet.execution.duration_ms, 42);
     }
 }
