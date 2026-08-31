@@ -124,6 +124,7 @@ diego [OPTIONS]
 | `--exposure-graph` | — | Emit a bounded, provenance-preserving exposure graph as JSON |
 | `--simulate-remediation <FINDING_IDS>` | — | Simulate removing comma-separated findings without changing the directory |
 | `--plan <PATH>` | — | Execute a credential-free multi-domain JSON plan |
+| `--plan-state <PATH>` | — | Write and resume a local multi-domain execution checkpoint |
 | `--governance-config <PATH>` | — | Local scoring and Finding ownership/SLA metadata JSON |
 | `--governance-output <PATH>` | — | Write a local fixed/regressed/open governance assessment |
 | `--sarif <PATH>` | — | Write a SARIF 2.1.0 findings sidecar for CI/security tools |
@@ -153,6 +154,11 @@ membership are not inferred from the plan file. The `execution` object records
 selected, completed, failed targets, the configured concurrency limit, and local
 elapsed milliseconds; it does not
 claim directory-wide coverage.
+
+Add `--plan-state fleet-state.json` to write a local checkpoint after each
+bounded batch. Re-running the same plan with that option resumes completed
+targets and retries unfinished or failed targets. The checkpoint is rejected
+if the plan scope, target ID, domain, or DC metadata has changed.
 
 #### Local remediation assessment (v0.8)
 

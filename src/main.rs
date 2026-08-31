@@ -6,7 +6,9 @@ use clap::Parser;
 use diego::ai;
 use diego::config::{Cli, Config};
 use diego::mcp;
-use diego::report::fleet::{FleetReport, PlanTarget, ScanPlan, TargetResult};
+use diego::report::fleet::{
+    validate_checkpoint, FleetReport, PlanTarget, ScanPlan, TargetResult,
+};
 use diego::report::governance::GovernanceConfig;
 use diego::report::{self, Report};
 use diego::run_scan;
@@ -50,6 +52,14 @@ async fn run_plan_target(target: PlanTarget, cli: Cli, username: String) -> Targ
             error: Some(error.to_string()),
         },
     }
+}
+
+fn write_plan_state(path: &std::path::Path, fleet: &FleetReport) -> anyhow::Result<()> {
+    let data = serde_json::to_string_pretty(fleet)?;
+    let temporary = path.with_extension("tmp");
+    std::fs::write(&temporary, data)?;
+    std::fs::rename(&temporary, path)?;
+    Ok(())
 }
 
 #[tokio::main]
@@ -103,14 +113,48 @@ async fn main() -> anyhow::Result<()> {
                 "--password or DIEGO_PASSWORD is required with --plan"
             ));
         }
-        let selected_targets = plan.selected_targets();
+        let mut selected_targets = plan.selected_targets();
+        let mut results = Vec::new();
+        if let Some(state_path) = &cli.plan_state
+            && state_path.exists()
+        {
+            let state_data = std::fs::read_to_string(state_path).map_err(|error| {
+                anyhow::anyhow!(
+                    "Failed to read plan checkpoint {}: {error}",
+                    state_path.display()
+                )
+            })?;
+            let checkpoint: FleetReport = serde_json::from_str(&state_data).map_err(|error| {
+                anyhow::anyhow!(
+                    "Failed to parse plan checkpoint {}: {error}",
+                    state_path.display()
+                )
+            })?;
+            validate_checkpoint(&plan, &checkpoint)?;
+            let completed_ids: std::collections::HashSet<String> = checkpoint
+                .results
+                .iter()
+                .filter(|result| result.status == "completed")
+                .map(|result| result.id.clone())
+                .collect();
+            results = checkpoint
+                .results
+                .into_iter()
+                .filter(|result| result.status == "completed")
+                .collect();
+            selected_targets.retain(|target| !completed_ids.contains(&target.id));
+            eprintln!(
+                "[+] Resuming from {} completed target(s) in {}",
+                completed_ids.len(),
+                state_path.display()
+            );
+        }
         eprintln!(
             "[+] Executing {} selected target(s) with max_parallel={} (scope: {})",
             selected_targets.len(),
             plan.max_parallel,
             plan.scope
         );
-        let mut results = Vec::new();
         for batch in selected_targets.chunks(plan.max_parallel) {
             let mut handles = Vec::with_capacity(batch.len());
             for target in batch.iter().cloned() {
@@ -126,6 +170,14 @@ async fn main() -> anyhow::Result<()> {
                         .await
                         .map_err(|error| anyhow::anyhow!("plan target task failed: {error}"))?,
                 );
+            }
+            if let Some(state_path) = &cli.plan_state {
+                let checkpoint = FleetReport::with_duration(
+                    &plan,
+                    results.clone(),
+                    plan_started.elapsed().as_millis().min(u64::MAX as u128) as u64,
+                );
+                write_plan_state(state_path, &checkpoint)?;
             }
         }
         let fleet = FleetReport::with_duration(

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-08-31
+
+### Added
+- Added local `--plan-state <path>` checkpoints for resumable multi-domain execution.
+- Added plan/target identity validation so checkpoints cannot be applied to a changed plan.
+
 ## [0.19.0] - 2026-08-31
 
 ### Added

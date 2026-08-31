@@ -53,12 +53,13 @@ pub struct FleetReport {
 
 /// Bounded local execution metrics for a fleet run. These are operational
 /// measurements, not estimates of directory size or network-wide coverage.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct FleetExecution {
     pub selected_targets: usize,
     pub completed_targets: usize,
     pub failed_targets: usize,
+    #[serde(default)]
     pub max_parallel: usize,
     pub duration_ms: u64,
 }
@@ -126,6 +127,42 @@ impl ScanPlan {
             .cloned()
             .collect()
     }
+}
+
+/// Ensure a checkpoint belongs to the exact plan target set it will resume.
+pub fn validate_checkpoint(plan: &ScanPlan, checkpoint: &FleetReport) -> anyhow::Result<()> {
+    if checkpoint.plan_version != plan.version {
+        anyhow::bail!(
+            "checkpoint plan version {} does not match {}",
+            checkpoint.plan_version,
+            plan.version
+        );
+    }
+    if checkpoint.scope != plan.scope {
+        anyhow::bail!(
+            "checkpoint scope {} does not match {}",
+            checkpoint.scope,
+            plan.scope
+        );
+    }
+    let targets: std::collections::HashMap<&str, (&str, &str)> = plan
+        .targets
+        .iter()
+        .map(|target| (target.id.as_str(), (target.domain.as_str(), target.dc.as_str())))
+        .collect();
+    let mut seen = HashSet::new();
+    for result in &checkpoint.results {
+        if !seen.insert(result.id.as_str()) {
+            anyhow::bail!("checkpoint contains duplicate target result: {}", result.id);
+        }
+        let Some((domain, dc)) = targets.get(result.id.as_str()) else {
+            anyhow::bail!("checkpoint target is not present in plan: {}", result.id);
+        };
+        if result.domain != *domain || result.dc != *dc {
+            anyhow::bail!("checkpoint target metadata changed: {}", result.id);
+        }
+    }
+    Ok(())
 }
 
 impl FleetReport {
@@ -292,5 +329,20 @@ mod tests {
         assert_eq!(fleet.execution.failed_targets, 1);
         assert_eq!(fleet.execution.max_parallel, 1);
         assert_eq!(fleet.execution.duration_ms, 42);
+    }
+
+    #[test]
+    fn checkpoint_validation_rejects_changed_target_metadata() {
+        let mut checkpoint = FleetReport::new(&plan(), Vec::new());
+        checkpoint.results.push(TargetResult {
+            id: "root".into(),
+            domain: "changed.example".into(),
+            dc: "10.0.0.1".into(),
+            status: "completed".into(),
+            report: None,
+            attack_path: None,
+            error: None,
+        });
+        assert!(validate_checkpoint(&plan(), &checkpoint).is_err());
     }
 }

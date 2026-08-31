@@ -113,6 +113,10 @@ pub struct Cli {
     #[arg(long)]
     pub plan: Option<PathBuf>,
 
+    /// Local checkpoint file for resumable multi-domain plan execution
+    #[arg(long, value_name = "PATH")]
+    pub plan_state: Option<PathBuf>,
+
     // ── MCP mode ─────────────────────────────────────────────────────────────
     /// Run as an MCP (Model Context Protocol) server over stdio
     #[arg(long)]
