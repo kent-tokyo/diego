@@ -7,7 +7,7 @@ use diego::ai;
 use diego::config::{Cli, Config};
 use diego::mcp;
 use diego::report::fleet::{
-    validate_checkpoint, FleetReport, PlanTarget, ScanPlan, TargetResult,
+    PlanCheckpoint, FleetReport, PlanTarget, ScanPlan, TargetResult,
 };
 use diego::report::governance::GovernanceConfig;
 use diego::report::{self, Report};
@@ -54,8 +54,13 @@ async fn run_plan_target(target: PlanTarget, cli: Cli, username: String) -> Targ
     }
 }
 
-fn write_plan_state(path: &std::path::Path, fleet: &FleetReport) -> anyhow::Result<()> {
-    let data = serde_json::to_string_pretty(fleet)?;
+fn write_plan_state(
+    path: &std::path::Path,
+    plan: &ScanPlan,
+    fleet: &FleetReport,
+) -> anyhow::Result<()> {
+    let checkpoint = PlanCheckpoint::new(plan, fleet)?;
+    let data = serde_json::to_string_pretty(&checkpoint)?;
     let temporary = path.with_extension("tmp");
     std::fs::write(&temporary, data)?;
     std::fs::rename(&temporary, path)?;
@@ -124,20 +129,22 @@ async fn main() -> anyhow::Result<()> {
                     state_path.display()
                 )
             })?;
-            let checkpoint: FleetReport = serde_json::from_str(&state_data).map_err(|error| {
+            let checkpoint: PlanCheckpoint = serde_json::from_str(&state_data).map_err(|error| {
                 anyhow::anyhow!(
                     "Failed to parse plan checkpoint {}: {error}",
                     state_path.display()
                 )
             })?;
-            validate_checkpoint(&plan, &checkpoint)?;
+            checkpoint.verify(&plan)?;
             let completed_ids: std::collections::HashSet<String> = checkpoint
+                .fleet
                 .results
                 .iter()
                 .filter(|result| result.status == "completed")
                 .map(|result| result.id.clone())
                 .collect();
             results = checkpoint
+                .fleet
                 .results
                 .into_iter()
                 .filter(|result| result.status == "completed")
@@ -177,7 +184,7 @@ async fn main() -> anyhow::Result<()> {
                     results.clone(),
                     plan_started.elapsed().as_millis().min(u64::MAX as u128) as u64,
                 );
-                write_plan_state(state_path, &checkpoint)?;
+                write_plan_state(state_path, &plan, &checkpoint)?;
             }
         }
         let fleet = FleetReport::with_duration(

@@ -155,10 +155,11 @@ selected, completed, failed targets, the configured concurrency limit, and local
 elapsed milliseconds; it does not
 claim directory-wide coverage.
 
-Add `--plan-state fleet-state.json` to write a local checkpoint after each
-bounded batch. Re-running the same plan with that option resumes completed
-targets and retries unfinished or failed targets. The checkpoint is rejected
-if the plan scope, target ID, domain, or DC metadata has changed.
+Add `--plan-state fleet-state.json` to write an integrity-protected local
+checkpoint after each bounded batch. Re-running the same plan with that option
+resumes completed targets and retries unfinished or failed targets. The
+checkpoint is rejected if its SHA-256 checksum is invalid or the plan scope,
+target ID, domain, or DC metadata has changed.
 
 #### Local remediation assessment (v0.8)
 

@@ -6,6 +6,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::net::IpAddr;
 
@@ -62,6 +63,56 @@ pub struct FleetExecution {
     #[serde(default)]
     pub max_parallel: usize,
     pub duration_ms: u64,
+}
+
+/// Integrity-protected local state for resuming a plan.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanCheckpoint {
+    pub schema: String,
+    pub plan_fingerprint: String,
+    pub fleet: FleetReport,
+    pub checksum: String,
+}
+
+impl PlanCheckpoint {
+    pub fn new(plan: &ScanPlan, fleet: &FleetReport) -> anyhow::Result<Self> {
+        let mut checkpoint = Self {
+            schema: "diego.plan-checkpoint.v1".into(),
+            plan_fingerprint: fingerprint(plan)?,
+            fleet: fleet.clone(),
+            checksum: String::new(),
+        };
+        checkpoint.checksum = checkpoint.calculate_checksum()?;
+        Ok(checkpoint)
+    }
+
+    pub fn verify(&self, plan: &ScanPlan) -> anyhow::Result<()> {
+        if self.schema != "diego.plan-checkpoint.v1" {
+            anyhow::bail!("unsupported plan checkpoint schema: {}", self.schema);
+        }
+        validate_checkpoint(plan, &self.fleet)?;
+        if self.plan_fingerprint != fingerprint(plan)? {
+            anyhow::bail!("checkpoint plan fingerprint does not match plan");
+        }
+        if self.checksum != self.calculate_checksum()? {
+            anyhow::bail!("plan checkpoint checksum mismatch");
+        }
+        Ok(())
+    }
+
+    fn calculate_checksum(&self) -> anyhow::Result<String> {
+        let unsigned = serde_json::json!({
+            "schema": self.schema,
+            "planFingerprint": self.plan_fingerprint,
+            "fleet": self.fleet,
+        });
+        Ok(hex::encode(Sha256::digest(serde_json::to_vec(&unsigned)?)))
+    }
+}
+
+fn fingerprint(plan: &ScanPlan) -> anyhow::Result<String> {
+    Ok(hex::encode(Sha256::digest(serde_json::to_vec(plan)?)))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -344,5 +395,13 @@ mod tests {
             error: None,
         });
         assert!(validate_checkpoint(&plan(), &checkpoint).is_err());
+    }
+
+    #[test]
+    fn checkpoint_rejects_tampering() {
+        let fleet = FleetReport::new(&plan(), Vec::new());
+        let mut checkpoint = PlanCheckpoint::new(&plan(), &fleet).unwrap();
+        checkpoint.fleet.scope = "changed".into();
+        assert!(checkpoint.verify(&plan()).is_err());
     }
 }

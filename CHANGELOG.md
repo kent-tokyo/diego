@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-08-31
+
+### Added
+- Added SHA-256 integrity protection and plan fingerprints to local Fleet checkpoints.
+- Added checkpoint schema validation to reject tampering or reuse with changed plans.
+
 ## [0.20.0] - 2026-08-31
 
 ### Added
