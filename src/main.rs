@@ -76,20 +76,25 @@ async fn main() -> anyhow::Result<()> {
             target_cli.username = Some(username.clone());
             let result = match Config::from_cli(target_cli) {
                 Ok(config) => match run_scan(Arc::new(config)).await {
-                    Ok(report) => TargetResult {
-                        id: target.id,
-                        domain: target.domain,
-                        dc: target.dc,
-                        status: "completed".into(),
-                        report: Some(report),
-                        error: None,
-                    },
+                    Ok(report) => {
+                        let attack_path = Some(report::attack_path::build(&report));
+                        TargetResult {
+                            id: target.id,
+                            domain: target.domain,
+                            dc: target.dc,
+                            status: "completed".into(),
+                            report: Some(report),
+                            attack_path,
+                            error: None,
+                        }
+                    }
                     Err(error) => TargetResult {
                         id: target.id,
                         domain: target.domain,
                         dc: target.dc,
                         status: "failed".into(),
                         report: None,
+                        attack_path: None,
                         error: Some(error.to_string()),
                     },
                 },
@@ -99,6 +104,7 @@ async fn main() -> anyhow::Result<()> {
                     dc: target.dc,
                     status: "failed".into(),
                     report: None,
+                    attack_path: None,
                     error: Some(error.to_string()),
                 },
             };

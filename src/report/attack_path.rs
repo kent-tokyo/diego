@@ -4,20 +4,20 @@
 //! traffic, execute actions, or expose credential material.
 
 use super::{Report, Severity};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AttackPathReport {
-    pub schema: &'static str,
+    pub schema: String,
     pub domain: String,
-    pub from: &'static str,
-    pub target: &'static str,
+    pub from: String,
+    pub target: String,
     pub steps: Vec<AttackPathStep>,
-    pub limitation: &'static str,
+    pub limitation: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AttackPathStep {
     pub finding_id: String,
@@ -42,10 +42,10 @@ pub fn build(report: &Report) -> AttackPathReport {
     });
 
     AttackPathReport {
-        schema: "diego.attack-path.v1",
+        schema: "diego.attack-path.v1".into(),
         domain: report.domain.clone(),
-        from: "standard_user",
-        target: "protected assets",
+        from: "standard_user".into(),
+        target: "protected assets".into(),
         steps: findings
             .into_iter()
             .filter_map(|finding| {
@@ -60,7 +60,7 @@ pub fn build(report: &Report) -> AttackPathReport {
                     })
             })
             .collect(),
-        limitation: "This is a bounded summary of observed finding hints, not an exploit path or a complete directory graph.",
+        limitation: "This is a bounded summary of observed finding hints, not an exploit path or a complete directory graph.".into(),
     }
 }
 

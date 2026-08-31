@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-31
+
+### Added
+- Added bounded per-target `attackPath` summaries to multi-domain `FleetReport` output.
+- Added contract coverage confirming attack-path redaction and omission for failed targets.
+
 ## [0.16.0] - 2026-08-31
 
 ### Added
@@ -207,6 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.14.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.14.0
 [0.15.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.15.0
 [0.16.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.16.0
+[0.17.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.17.0
 [0.5.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.5.0
 [0.4.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.3.0

@@ -146,8 +146,10 @@ diego --plan docs/sample-scan-plan.json \
 The plan contains target metadata only. Targets are executed sequentially in
 v0.7 so query volume remains predictable. The JSON `FleetReport` preserves each
 target's status, completed report or error, requested scope, and aggregate
-severity counts. Scope is explicit metadata; trust and forest membership are
-not inferred from the plan file.
+severity counts. Completed targets also include a bounded `attackPath` summary
+derived from Critical/High finding hints; it contains no raw evidence and is
+omitted when a target fails. Scope is explicit metadata; trust and forest
+membership are not inferred from the plan file.
 
 #### Local remediation assessment (v0.8)
 

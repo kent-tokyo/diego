@@ -58,6 +58,9 @@ pub struct TargetResult {
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub report: Option<Report>,
+    /// Bounded defensive path summary; never contains raw evidence.
+    #[serde(rename = "attackPath", skip_serializing_if = "Option::is_none")]
+    pub attack_path: Option<super::attack_path::AttackPathReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -192,5 +195,36 @@ mod tests {
         p.targets[1].enabled = false;
         p.validate().unwrap();
         assert_eq!(p.selected_targets().len(), 1);
+    }
+
+    #[test]
+    fn fleet_target_path_is_redacted_and_optional_on_failures() {
+        let report = crate::report::sample::sample_report();
+        let path = crate::report::attack_path::build(&report);
+        let result = TargetResult {
+            id: "root".into(),
+            domain: report.domain.clone(),
+            dc: "10.0.0.1".into(),
+            status: "completed".into(),
+            report: Some(report),
+            attack_path: Some(path),
+            error: None,
+        };
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["attackPath"]["schema"], "diego.attack-path.v1");
+        assert_eq!(json["attackPath"]["from"], "standard_user");
+        assert!(json["attackPath"].get("evidence").is_none());
+
+        let failed = TargetResult {
+            id: "failed".into(),
+            domain: "corp.example".into(),
+            dc: "10.0.0.2".into(),
+            status: "failed".into(),
+            report: None,
+            attack_path: None,
+            error: Some("unavailable".into()),
+        };
+        let failed_json = serde_json::to_value(failed).unwrap();
+        assert!(failed_json.get("attackPath").is_none());
     }
 }
