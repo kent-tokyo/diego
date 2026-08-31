@@ -59,6 +59,7 @@ pub struct FleetExecution {
     pub selected_targets: usize,
     pub completed_targets: usize,
     pub failed_targets: usize,
+    pub max_parallel: usize,
     pub duration_ms: u64,
 }
 
@@ -175,6 +176,7 @@ impl FleetReport {
                 selected_targets: completed_targets + failed_targets,
                 completed_targets,
                 failed_targets,
+                max_parallel: plan.max_parallel,
                 duration_ms,
             },
         }
@@ -288,6 +290,7 @@ mod tests {
         assert_eq!(fleet.execution.selected_targets, 2);
         assert_eq!(fleet.execution.completed_targets, 1);
         assert_eq!(fleet.execution.failed_targets, 1);
+        assert_eq!(fleet.execution.max_parallel, 1);
         assert_eq!(fleet.execution.duration_ms, 42);
     }
 }

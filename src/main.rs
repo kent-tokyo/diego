@@ -6,10 +6,51 @@ use clap::Parser;
 use diego::ai;
 use diego::config::{Cli, Config};
 use diego::mcp;
-use diego::report::fleet::{FleetReport, ScanPlan, TargetResult};
+use diego::report::fleet::{FleetReport, PlanTarget, ScanPlan, TargetResult};
 use diego::report::governance::GovernanceConfig;
 use diego::report::{self, Report};
 use diego::run_scan;
+
+async fn run_plan_target(target: PlanTarget, cli: Cli, username: String) -> TargetResult {
+    let mut target_cli = cli;
+    target_cli.plan = None;
+    target_cli.mcp = false;
+    target_cli.dc = Some(target.dc.clone());
+    target_cli.domain = Some(target.domain.clone());
+    target_cli.username = Some(username);
+
+    match Config::from_cli(target_cli) {
+        Ok(config) => match run_scan(Arc::new(config)).await {
+            Ok(report) => TargetResult {
+                id: target.id,
+                domain: target.domain,
+                dc: target.dc,
+                status: "completed".into(),
+                attack_path: Some(report::attack_path::build(&report)),
+                report: Some(report),
+                error: None,
+            },
+            Err(error) => TargetResult {
+                id: target.id,
+                domain: target.domain,
+                dc: target.dc,
+                status: "failed".into(),
+                report: None,
+                attack_path: None,
+                error: Some(error.to_string()),
+            },
+        },
+        Err(error) => TargetResult {
+            id: target.id,
+            domain: target.domain,
+            dc: target.dc,
+            status: "failed".into(),
+            report: None,
+            attack_path: None,
+            error: Some(error.to_string()),
+        },
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -62,54 +103,30 @@ async fn main() -> anyhow::Result<()> {
                 "--password or DIEGO_PASSWORD is required with --plan"
             ));
         }
+        let selected_targets = plan.selected_targets();
         eprintln!(
-            "[+] Executing {} selected target(s) sequentially (scope: {})",
-            plan.selected_targets().len(),
+            "[+] Executing {} selected target(s) with max_parallel={} (scope: {})",
+            selected_targets.len(),
+            plan.max_parallel,
             plan.scope
         );
         let mut results = Vec::new();
-        for target in plan.selected_targets() {
-            let mut target_cli = cli.clone();
-            target_cli.plan = None;
-            target_cli.mcp = false;
-            target_cli.dc = Some(target.dc.clone());
-            target_cli.domain = Some(target.domain.clone());
-            target_cli.username = Some(username.clone());
-            let result = match Config::from_cli(target_cli) {
-                Ok(config) => match run_scan(Arc::new(config)).await {
-                    Ok(report) => {
-                        let attack_path = Some(report::attack_path::build(&report));
-                        TargetResult {
-                            id: target.id,
-                            domain: target.domain,
-                            dc: target.dc,
-                            status: "completed".into(),
-                            report: Some(report),
-                            attack_path,
-                            error: None,
-                        }
-                    }
-                    Err(error) => TargetResult {
-                        id: target.id,
-                        domain: target.domain,
-                        dc: target.dc,
-                        status: "failed".into(),
-                        report: None,
-                        attack_path: None,
-                        error: Some(error.to_string()),
-                    },
-                },
-                Err(error) => TargetResult {
-                    id: target.id,
-                    domain: target.domain,
-                    dc: target.dc,
-                    status: "failed".into(),
-                    report: None,
-                    attack_path: None,
-                    error: Some(error.to_string()),
-                },
-            };
-            results.push(result);
+        for batch in selected_targets.chunks(plan.max_parallel) {
+            let mut handles = Vec::with_capacity(batch.len());
+            for target in batch.iter().cloned() {
+                handles.push(tokio::spawn(run_plan_target(
+                    target,
+                    cli.clone(),
+                    username.clone(),
+                )));
+            }
+            for handle in handles {
+                results.push(
+                    handle
+                        .await
+                        .map_err(|error| anyhow::anyhow!("plan target task failed: {error}"))?,
+                );
+            }
         }
         let fleet = FleetReport::with_duration(
             &plan,
