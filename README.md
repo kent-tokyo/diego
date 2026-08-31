@@ -128,6 +128,7 @@ diego [OPTIONS]
 | `--governance-output <PATH>` | — | Write a local fixed/regressed/open governance assessment |
 | `--sarif <PATH>` | — | Write a SARIF 2.1.0 findings sidecar for CI/security tools |
 | `--attack-path` | — | Emit the bounded defensive attack-path summary as JSON or Markdown |
+| `--attack-path-output <PATH>` | — | Write the attack-path summary to an offline JSON/Markdown sidecar |
 | `--timeout <TIMEOUT>` | `10` | Per-query timeout in seconds |
 | `--interface <INTERFACE>` | Auto-detect | Network interface for passive listening |
 | `--ai-model <AI_MODEL>` | `claude-sonnet-4-6` | Claude model for analysis |

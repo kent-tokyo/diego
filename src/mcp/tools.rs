@@ -637,6 +637,7 @@ fn build_minimal_config(
         sarif_output: None,
         webhook_output: None,
         attack_path: false,
+        attack_path_output: None,
         mcp: false,
     })
 }

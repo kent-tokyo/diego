@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-08-31
+
+### Added
+- Added `--attack-path-output <path>` for offline JSON/Markdown attack-path sidecars while preserving the normal report output.
+- Added CLI coverage for separating the bounded path summary from the primary report stream.
+
 ## [0.15.0] - 2026-08-31
 
 ### Added
@@ -200,6 +206,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.13.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.13.0
 [0.14.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.14.0
 [0.15.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.15.0
+[0.16.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.16.0
 [0.5.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.5.0
 [0.4.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.3.0

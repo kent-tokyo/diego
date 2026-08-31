@@ -1,7 +1,7 @@
+use std::io::{self, Write};
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::io::{self, Write};
 
 use clap::Parser;
 use zeroize::Zeroizing;
@@ -53,7 +53,6 @@ pub struct Cli {
     pub interface: Option<String>,
 
     // ── AI flags ─────────────────────────────────────────────────────────────
-
     /// Analyze scan results with Claude API after scanning
     #[arg(long)]
     pub ai_analyze: bool,
@@ -67,7 +66,6 @@ pub struct Cli {
     pub ai_model: String,
 
     // ── Safe mode ─────────────────────────────────────────────────────────────
-
     /// Run mode: audit (default) redacts crackable hashes; full keeps raw evidence
     #[arg(long, value_enum, default_value = "audit")]
     pub mode: RunMode,
@@ -107,12 +105,15 @@ pub struct Cli {
     #[arg(long)]
     pub attack_path: bool,
 
+    /// Write the bounded defensive attack-path summary to a local sidecar
+    #[arg(long)]
+    pub attack_path_output: Option<PathBuf>,
+
     /// JSON multi-domain execution plan (credentials remain CLI/env supplied)
     #[arg(long)]
     pub plan: Option<PathBuf>,
 
     // ── MCP mode ─────────────────────────────────────────────────────────────
-
     /// Run as an MCP (Model Context Protocol) server over stdio
     #[arg(long)]
     pub mcp: bool,
@@ -171,17 +172,22 @@ pub struct Config {
     pub sarif_output: Option<PathBuf>,
     pub webhook_output: Option<PathBuf>,
     pub attack_path: bool,
+    pub attack_path_output: Option<PathBuf>,
     // MCP
     pub mcp: bool,
 }
 
 impl Config {
     pub fn from_cli(cli: Cli) -> anyhow::Result<Self> {
-        let dc_str = cli.dc.ok_or_else(|| anyhow::anyhow!("--dc is required in CLI mode"))?;
+        let dc_str = cli
+            .dc
+            .ok_or_else(|| anyhow::anyhow!("--dc is required in CLI mode"))?;
         let dc_ip = IpAddr::from_str(&dc_str)
             .map_err(|_| anyhow::anyhow!("Invalid DC IP address: {}", dc_str))?;
 
-        let domain = cli.domain.ok_or_else(|| anyhow::anyhow!("--domain is required in CLI mode"))?;
+        let domain = cli
+            .domain
+            .ok_or_else(|| anyhow::anyhow!("--domain is required in CLI mode"))?;
         let base_dn = domain_to_base_dn(&domain);
         let modules = parse_modules(&cli.modules);
 
@@ -191,7 +197,9 @@ impl Config {
             _ => ReportFormat::Json,
         };
 
-        let username = cli.username.ok_or_else(|| anyhow::anyhow!("--username is required in CLI mode"))?;
+        let username = cli
+            .username
+            .ok_or_else(|| anyhow::anyhow!("--username is required in CLI mode"))?;
 
         // Password resolution: CLI → ENV → keytab → krb5 cache → interactive prompt
         let password = if let Some(pwd) = cli.password {
@@ -248,6 +256,7 @@ impl Config {
             sarif_output: cli.sarif_output,
             webhook_output: cli.webhook_output,
             attack_path: cli.attack_path,
+            attack_path_output: cli.attack_path_output,
             mcp: cli.mcp,
         })
     }
@@ -284,7 +293,11 @@ fn get_password_from_keytab(username: &str, domain: &str) -> Option<String> {
 
     if keytab_path.exists() {
         eprintln!("[*] Found keytab at {}", keytab_path.display());
-        eprintln!("[*] Kerberos principal: {}@{}", username, domain.to_uppercase());
+        eprintln!(
+            "[*] Kerberos principal: {}@{}",
+            username,
+            domain.to_uppercase()
+        );
         // Return marker to signal keytab auth; actual Kerberos client will use the keytab
         Some("KERBEROS_KEYTAB".to_string())
     } else {
@@ -301,7 +314,11 @@ fn get_password_from_krb5_cache(username: &str, domain: &str) -> Option<String> 
         if let Ok(ccname) = std::env::var("KRB5CCNAME") {
             // KRB5CCNAME is set (e.g., "FILE:/tmp/krb5cc_1000")
             eprintln!("[*] Found KRB5CCNAME: {}", ccname);
-            eprintln!("[*] Using cached Kerberos credentials for {}@{}", username, domain.to_uppercase());
+            eprintln!(
+                "[*] Using cached Kerberos credentials for {}@{}",
+                username,
+                domain.to_uppercase()
+            );
             return Some("KERBEROS_CACHE".to_string());
         }
 
@@ -309,7 +326,11 @@ fn get_password_from_krb5_cache(username: &str, domain: &str) -> Option<String> 
             let cache_path = PathBuf::from(format!("/tmp/krb5cc_{}", uid));
             if cache_path.exists() {
                 eprintln!("[*] Found Kerberos TGT cache at {}", cache_path.display());
-                eprintln!("[*] Using cached Kerberos credentials for {}@{}", username, domain.to_uppercase());
+                eprintln!(
+                    "[*] Using cached Kerberos credentials for {}@{}",
+                    username,
+                    domain.to_uppercase()
+                );
                 return Some("KERBEROS_CACHE".to_string());
             }
         }
@@ -322,7 +343,11 @@ fn get_password_from_krb5_cache(username: &str, domain: &str) -> Option<String> 
         // macOS: check ~/Library/Caches/org.h5l.kcm/event or KRB5CCNAME
         if let Ok(ccname) = std::env::var("KRB5CCNAME") {
             eprintln!("[*] Found KRB5CCNAME: {}", ccname);
-            eprintln!("[*] Using cached Kerberos credentials for {}@{}", username, domain.to_uppercase());
+            eprintln!(
+                "[*] Using cached Kerberos credentials for {}@{}",
+                username,
+                domain.to_uppercase()
+            );
             return Some("KERBEROS_CACHE".to_string());
         }
         None
@@ -363,7 +388,10 @@ mod tests {
     #[test]
     fn test_domain_to_base_dn() {
         assert_eq!(domain_to_base_dn("corp.local"), "DC=corp,DC=local");
-        assert_eq!(domain_to_base_dn("ad.example.com"), "DC=ad,DC=example,DC=com");
+        assert_eq!(
+            domain_to_base_dn("ad.example.com"),
+            "DC=ad,DC=example,DC=com"
+        );
     }
 
     #[test]
@@ -400,4 +428,22 @@ mod tests {
         assert!(matches!(parse_format("nonsense"), ReportFormat::Json));
     }
 
+    #[test]
+    fn parses_attack_path_sidecar_flag() {
+        let cli = Cli::try_parse_from([
+            "diego",
+            "--dc",
+            "10.0.0.1",
+            "--domain",
+            "corp.local",
+            "--username",
+            "jdoe",
+            "--password",
+            "secret",
+            "--attack-path-output",
+            "path.json",
+        ])
+        .unwrap();
+        assert_eq!(cli.attack_path_output, Some(PathBuf::from("path.json")));
+    }
 }
