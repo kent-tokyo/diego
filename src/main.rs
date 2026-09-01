@@ -99,6 +99,32 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // ── Offline plan validation ──────────────────────────────────────────────
+    if cli.plan_validate {
+        let plan_path = cli
+            .plan
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("--plan is required with --plan-validate"))?;
+        let data = std::fs::read_to_string(plan_path).map_err(|error| {
+            anyhow::anyhow!("Failed to read scan plan {}: {error}", plan_path.display())
+        })?;
+        let plan: ScanPlan = serde_json::from_str(&data).map_err(|error| {
+            anyhow::anyhow!("Failed to parse scan plan {}: {error}", plan_path.display())
+        })?;
+        plan.validate()?;
+        let selected = plan.selected_targets();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "valid": true,
+                "scope": plan.scope,
+                "maxParallel": plan.max_parallel,
+                "selectedTargets": selected,
+            }))?
+        );
+        return Ok(());
+    }
+
     // ── Multi-domain plan mode ───────────────────────────────────────────────
     if let Some(plan_path) = &cli.plan {
         let data = std::fs::read_to_string(plan_path).map_err(|e| {

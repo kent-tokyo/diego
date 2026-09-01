@@ -124,6 +124,7 @@ diego [OPTIONS]
 | `--exposure-graph` | — | Emit a bounded, provenance-preserving exposure graph as JSON |
 | `--simulate-remediation <FINDING_IDS>` | — | Simulate removing comma-separated findings without changing the directory |
 | `--plan <PATH>` | — | Execute a credential-free multi-domain JSON plan |
+| `--plan-validate` | — | Validate a plan locally without credentials or network access |
 | `--plan-state <PATH>` | — | Write and resume a local multi-domain execution checkpoint |
 | `--governance-config <PATH>` | — | Local scoring and Finding ownership/SLA metadata JSON |
 | `--governance-output <PATH>` | — | Write a local fixed/regressed/open governance assessment |
@@ -160,6 +161,10 @@ checkpoint after each bounded batch. Re-running the same plan with that option
 resumes completed targets and retries unfinished or failed targets. The
 checkpoint is rejected if its SHA-256 checksum is invalid or the plan scope,
 target ID, domain, or DC metadata has changed.
+
+Use `diego --plan plan.json --plan-validate` to validate a plan without
+credentials or network access. It prints only the validated scope, parallelism,
+and selected target metadata.
 
 #### Local remediation assessment (v0.8)
 

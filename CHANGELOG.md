@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-09-01
+
+### Added
+- Added `--plan-validate` for credential-free, network-free scan plan validation.
+- Added normalized validation output showing scope, bounded parallelism, and selected targets.
+
 ## [0.21.0] - 2026-08-31
 
 ### Added

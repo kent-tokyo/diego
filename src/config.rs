@@ -25,7 +25,10 @@ pub struct Cli {
     pub username: Option<String>,
 
     /// Password for authentication
-    #[arg(long, required_unless_present = "mcp")]
+    #[arg(
+        long,
+        required_unless_present_any = ["mcp", "plan_validate"]
+    )]
     pub password: Option<String>,
 
     /// Modules to run: kerberos, ldap, passive, all
@@ -112,6 +115,10 @@ pub struct Cli {
     /// JSON multi-domain execution plan (credentials remain CLI/env supplied)
     #[arg(long)]
     pub plan: Option<PathBuf>,
+
+    /// Validate a plan locally without credentials or network access
+    #[arg(long)]
+    pub plan_validate: bool,
 
     /// Local checkpoint file for resumable multi-domain plan execution
     #[arg(long, value_name = "PATH")]
