@@ -14,13 +14,13 @@ is **not** yet covered.
 
 ## What is not yet covered
 
-There is **no live-DC end-to-end test** — diego is not yet run against a real or
-mocked directory in CI. The detection layer exercises the analysis logic over
+There is **no live-DC end-to-end test** — diego is not run against a real or
+mocked directory in CI. The detection layer exercises analysis logic over
 representative objects, and the integration layer covers filters and KDC
-parsing, but the full fetch→analyze path against directory data is a roadmap
-item. See [ROADMAP.md](../ROADMAP.md) ("Reproduction corpus → live-path
-detection tests"). Performance benchmarks are also pending a lab environment
-(methodology only in [BENCHMARKS.md](BENCHMARKS.md)).
+parsing. Plan validation, bounded execution, checkpoint identity, and
+checkpoint tamper rejection are covered locally. Performance benchmarks remain
+pending a controlled lab environment (methodology only in
+[BENCHMARKS.md](BENCHMARKS.md)).
 
 ## Running
 
@@ -29,6 +29,7 @@ cargo test --all                       # everything
 cargo test --test detection_tests      # one layer
 cargo clippy --all -- -D warnings      # lints (CI gate)
 cargo audit                            # advisories (CI gate)
+cargo run -- --plan docs/sample-scan-plan.json --plan-validate
 ```
 
 ## Updating the golden snapshot

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- Consolidated the README and synchronized translated quick-start documentation with the current v0.22.0 CLI.
+- Removed the obsolete implemented-safe-mode design sketch and refreshed the roadmap and testing boundaries.
+
 ## [0.22.0] - 2026-09-01
 
 ### Added
@@ -244,6 +248,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.15.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.15.0
 [0.16.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.16.0
 [0.17.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.17.0
+[0.18.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.18.0
+[0.19.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.19.0
+[0.20.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.20.0
+[0.21.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.21.0
+[0.22.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.22.0
 [0.5.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.5.0
 [0.4.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.3.0
