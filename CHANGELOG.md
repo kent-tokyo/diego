@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-09-26
+
 ### Added
 - Email & domain authentication hygiene module (Surface A), the first
   non-Active-Directory diagnostic surface. Read-only over public DNS only,
@@ -133,3 +135,4 @@ Use the repository's tags and GitHub releases for the full historical notes.
 [0.20.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.20.0
 [0.21.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.21.0
 [0.22.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.22.0
+[0.23.0]: https://github.com/kent-tokyo/diego/releases/tag/v0.23.0

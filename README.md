@@ -7,10 +7,10 @@ commands, crack hashes, exploit hosts, or move laterally.
 
 ## Current release
 
-The working tree targets **v0.22.0**. Recent releases added bounded multi-domain
-execution, resumable local checkpoints, checkpoint integrity validation, and
-credential-free plan validation. Registry publication is intentionally paused;
-the current development workflow is local and offline.
+**v0.23.0** adds credential-free, read-only posture diagnostics for email
+authentication, explicitly named TLS endpoints, and operator-named local paths.
+These surfaces run without a Domain Controller and do not execute commands,
+read file contents, scan ports, or attempt authentication.
 
 ## Capabilities
 

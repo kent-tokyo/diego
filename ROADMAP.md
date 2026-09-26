@@ -4,7 +4,7 @@ The roadmap prioritises evidence quality, defensive operations, and honest
 limits. diego does not promise stealth, exploitation, lateral movement, or a
 complete BloodHound export.
 
-## Current status: v0.22.0
+## Current status: v0.23.0
 
 Completed and covered locally:
 
