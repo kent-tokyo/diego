@@ -116,4 +116,6 @@ only when their dependencies are already cached. See
 
 ## License
 
-MIT
+MIT License. Copyright (c) 2026 kent-tokyo. You may use, modify, and
+redistribute diego under the terms in [LICENSE](LICENSE); copies and substantial
+portions must retain this copyright and permission notice.
