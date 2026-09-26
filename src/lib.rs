@@ -13,9 +13,12 @@ pub mod utils;
 
 use config::{Config, ModuleKind, RunMode};
 use modules::{
+    email::EmailModule,
+    fs::FsModule,
     kerberos::KerberosModule,
     ldap::{run_ldap_and_extract_context, LdapModule},
     passive::PassiveModule,
+    tls::TlsModule,
     DiagnosticModule, LdapContext,
 };
 use report::{make_scan_context, Report};
@@ -79,6 +82,30 @@ pub async fn run_scan(config: Arc<Config>) -> anyhow::Result<Report> {
             }
         }
         (false, false) => {}
+    }
+
+    if config.modules.contains(&ModuleKind::Email) {
+        modules_run.push("email".to_string());
+        match EmailModule::new().run(Arc::clone(&config)).await {
+            Ok(findings) => all_findings.extend(findings),
+            Err(error) => eprintln!("[!] email module error: {}", error),
+        }
+    }
+
+    if config.modules.contains(&ModuleKind::Tls) {
+        modules_run.push("tls".to_string());
+        match TlsModule::new().run(Arc::clone(&config)).await {
+            Ok(findings) => all_findings.extend(findings),
+            Err(error) => eprintln!("[!] tls module error: {}", error),
+        }
+    }
+
+    if config.modules.contains(&ModuleKind::Fs) {
+        modules_run.push("fs".to_string());
+        match FsModule::new().run(Arc::clone(&config)).await {
+            Ok(findings) => all_findings.extend(findings),
+            Err(error) => eprintln!("[!] fs module error: {}", error),
+        }
     }
 
     let mut report = Report::new(make_scan_context(&config, modules_run, start), all_findings);

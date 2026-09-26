@@ -5,6 +5,38 @@ All notable changes to diego are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Email & domain authentication hygiene module (Surface A), the first
+  non-Active-Directory diagnostic surface. Read-only over public DNS only,
+  requiring neither credentials nor a Domain Controller. Checks SPF (missing,
+  +all, softfail/neutral, no-all, multiple records, >10-lookup limit), DMARC
+  (missing, p=none/quarantine/reject, missing reporting), DKIM across common
+  selectors (inconclusive on miss), MTA-STS, TLS-RPT, CAA, and a bounded DNSSEC
+  check (DS presence + resolver AD flag).
+- Hand-written minimal DNS client (no resolver crate): UDP with EDNS0, one
+  retry, and TCP fallback on truncation. `--modules email`, `--dns-resolver`,
+  and `--dkim-selectors` flags. Email-only runs require only `--domain`.
+- TLS transport-hygiene module (Surface B), the second non-Active-Directory
+  surface. Read-only probing of explicitly named endpoints (`--modules tls`,
+  `--tls-target host[:port]`): detects accepted protocol versions
+  (TLS 1.0/1.1/1.2/1.3) via per-version ClientHello probes, the negotiated
+  cipher (flagging 3DES/RC4), and certificate validity
+  (expired/expiring-within-30-days/not-yet-valid/self-signed) parsed from the
+  cleartext TLS 1.2 Certificate message. Hand-written ClientHello encoder,
+  ServerHello/alert classifier, and minimal X.509 validity parser (no TLS or
+  X.509 crate). No port scanning, no handshake completion, no exploit probes;
+  needs no credentials or Domain Controller.
+- Local file-permission posture module (Surface C), the third non-Active-Directory
+  surface. Read-only, unprivileged self-audit of operator-named paths
+  (`--modules fs`, `--fs-path <dir|file>`): flags over-permissive private keys
+  and credential files (group/other readable or writable), world-writable files
+  and directories (no sticky bit), and loose `.ssh`/`.gnupg` permissions.
+  Inspects Unix permission bits only — never reads file contents, never follows
+  symlinks, never executes OS commands, never escalates. Bounded by depth and
+  entry count; needs no credentials or Domain Controller.
+
 ## [0.22.0] - 2026-09-26
 
 ### Documentation

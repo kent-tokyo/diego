@@ -1,6 +1,9 @@
+pub mod email;
+pub mod fs;
 pub mod kerberos;
 pub mod ldap;
 pub mod passive;
+pub mod tls;
 
 use async_trait::async_trait;
 use std::sync::Arc;
