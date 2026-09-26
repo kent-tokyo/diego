@@ -25,10 +25,7 @@ pub struct Cli {
     pub username: Option<String>,
 
     /// Password for authentication
-    #[arg(
-        long,
-        required_unless_present_any = ["mcp", "plan_validate"]
-    )]
+    #[arg(long)]
     pub password: Option<String>,
 
     /// Modules to run: kerberos, ldap, passive, all
@@ -54,6 +51,22 @@ pub struct Cli {
     /// Network interface for passive listening
     #[arg(long)]
     pub interface: Option<String>,
+
+    /// DNS resolver for email/domain hygiene checks (ip or ip:port; default: system resolver)
+    #[arg(long)]
+    pub dns_resolver: Option<String>,
+
+    /// Comma-separated DKIM selectors to probe (default: common selectors)
+    #[arg(long)]
+    pub dkim_selectors: Option<String>,
+
+    /// TLS endpoints for transport-hygiene checks: comma-separated host[:port]
+    #[arg(long)]
+    pub tls_target: Option<String>,
+
+    /// Local paths for file-permission posture checks (comma-separated files/dirs)
+    #[arg(long)]
+    pub fs_path: Option<String>,
 
     // ── AI flags ─────────────────────────────────────────────────────────────
     /// Analyze scan results with Claude API after scanning
@@ -146,6 +159,9 @@ pub enum ModuleKind {
     Kerberos,
     Ldap,
     Passive,
+    Email,
+    Tls,
+    Fs,
 }
 
 #[derive(Clone, Debug)]
@@ -168,6 +184,10 @@ pub struct Config {
     pub baseline: Option<PathBuf>,
     pub timeout_secs: u64,
     pub interface: Option<String>,
+    pub dns_resolver: Option<String>,
+    pub dkim_selectors: Vec<String>,
+    pub tls_targets: Vec<String>,
+    pub fs_paths: Vec<String>,
     // AI
     pub ai_analyze: bool,
     pub chat: bool,
@@ -190,17 +210,22 @@ pub struct Config {
 
 impl Config {
     pub fn from_cli(cli: Cli) -> anyhow::Result<Self> {
-        let dc_str = cli
-            .dc
-            .ok_or_else(|| anyhow::anyhow!("--dc is required in CLI mode"))?;
-        let dc_ip = IpAddr::from_str(&dc_str)
-            .map_err(|_| anyhow::anyhow!("Invalid DC IP address: {}", dc_str))?;
+        let modules = parse_modules(&cli.modules);
+        let ad_modules = modules.iter().any(|m| {
+            matches!(m, ModuleKind::Kerberos | ModuleKind::Ldap | ModuleKind::Passive)
+        });
+        // Network-hygiene runs (email/tls) query public DNS or specified TLS
+        // endpoints and need neither a Domain Controller nor credentials. AD
+        // modules require both.
+        let credential_free = !ad_modules
+            && modules
+                .iter()
+                .any(|m| matches!(m, ModuleKind::Email | ModuleKind::Tls | ModuleKind::Fs));
 
         let domain = cli
             .domain
             .ok_or_else(|| anyhow::anyhow!("--domain is required in CLI mode"))?;
         let base_dn = domain_to_base_dn(&domain);
-        let modules = parse_modules(&cli.modules);
 
         let format = match cli.format.to_lowercase().as_str() {
             "markdown" | "md" => ReportFormat::Markdown,
@@ -208,28 +233,38 @@ impl Config {
             _ => ReportFormat::Json,
         };
 
-        let username = cli
-            .username
-            .ok_or_else(|| anyhow::anyhow!("--username is required in CLI mode"))?;
-
-        // Password resolution: CLI → environment → interactive prompt.
-        // Keytab and Kerberos-cache authentication require GSSAPI/SASL support,
-        // which diego does not implement yet.
-        let password = if let Some(pwd) = cli.password {
-            // Explicitly provided
-            eprintln!("[+] Using password from --password");
-            Zeroizing::new(pwd)
-        } else if let Ok(pwd) = std::env::var("DIEGO_PASSWORD") {
-            // Environment variable
-            eprintln!("[+] Using password from $DIEGO_PASSWORD");
-            Zeroizing::new(pwd)
+        let (dc_ip, username, password) = if credential_free {
+            (
+                IpAddr::from([0u8, 0, 0, 0]),
+                cli.username.unwrap_or_default(),
+                Zeroizing::new(String::new()),
+            )
         } else {
-            // Interactive prompt
-            eprint!("Password: ");
-            io::stdout().flush()?;
-            let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
-            Zeroizing::new(input.trim().to_string())
+            let dc_str = cli
+                .dc
+                .ok_or_else(|| anyhow::anyhow!("--dc is required in CLI mode"))?;
+            let dc_ip = IpAddr::from_str(&dc_str)
+                .map_err(|_| anyhow::anyhow!("Invalid DC IP address: {}", dc_str))?;
+            let username = cli
+                .username
+                .ok_or_else(|| anyhow::anyhow!("--username is required in CLI mode"))?;
+            // Password resolution: CLI → environment → interactive prompt.
+            // Keytab and Kerberos-cache authentication require GSSAPI/SASL support,
+            // which diego does not implement yet.
+            let password = if let Some(pwd) = cli.password {
+                eprintln!("[+] Using password from --password");
+                Zeroizing::new(pwd)
+            } else if let Ok(pwd) = std::env::var("DIEGO_PASSWORD") {
+                eprintln!("[+] Using password from $DIEGO_PASSWORD");
+                Zeroizing::new(pwd)
+            } else {
+                eprint!("Password: ");
+                io::stdout().flush()?;
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                Zeroizing::new(input.trim().to_string())
+            };
+            (dc_ip, username, password)
         };
 
         if cli.export_hashes && cli.mode != RunMode::Full {
@@ -248,6 +283,34 @@ impl Config {
             baseline: cli.baseline,
             timeout_secs: cli.timeout,
             interface: cli.interface,
+            dns_resolver: cli.dns_resolver,
+            dkim_selectors: cli
+                .dkim_selectors
+                .map(|s| {
+                    s.split(',')
+                        .map(|x| x.trim().to_string())
+                        .filter(|x| !x.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default(),
+            tls_targets: cli
+                .tls_target
+                .map(|s| {
+                    s.split(',')
+                        .map(|x| x.trim().to_string())
+                        .filter(|x| !x.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default(),
+            fs_paths: cli
+                .fs_path
+                .map(|s| {
+                    s.split(',')
+                        .map(|x| x.trim().to_string())
+                        .filter(|x| !x.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default(),
             ai_analyze: cli.ai_analyze || cli.chat,
             chat: cli.chat,
             ai_model: cli.ai_model,
@@ -296,6 +359,9 @@ fn parse_modules(s: &str) -> Vec<ModuleKind> {
             "kerberos" | "kerb" => Some(ModuleKind::Kerberos),
             "ldap" => Some(ModuleKind::Ldap),
             "passive" | "pass" => Some(ModuleKind::Passive),
+            "email" | "mail" => Some(ModuleKind::Email),
+            "tls" => Some(ModuleKind::Tls),
+            "fs" => Some(ModuleKind::Fs),
             _ => None,
         })
         .collect()

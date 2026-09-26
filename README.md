@@ -7,10 +7,10 @@ commands, crack hashes, exploit hosts, or move laterally.
 
 ## Current release
 
-The working tree targets **v0.22.0**. Recent releases added bounded multi-domain
-execution, resumable local checkpoints, checkpoint integrity validation, and
-credential-free plan validation. Registry publication is intentionally paused;
-the current development workflow is local and offline.
+**v0.23.0** adds credential-free, read-only posture diagnostics for email
+authentication, explicitly named TLS endpoints, and operator-named local paths.
+These surfaces run without a Domain Controller and do not execute commands,
+read file contents, scan ports, or attempt authentication.
 
 ## Capabilities
 
@@ -19,6 +19,17 @@ the current development workflow is local and offline.
 - Kerberos: AS-REP and TGS requests with audit-safe evidence handling.
 - Passive observation: LLMNR/NBT-NS and cleartext-protocol indicators on a
   selected local interface.
+- Email & domain authentication hygiene (Surface A): SPF, DMARC, DKIM (common
+  selectors), MTA-STS, TLS-RPT, CAA, and a bounded DNSSEC check — over public
+  DNS only, needing no credentials and no Domain Controller.
+- TLS transport hygiene (Surface B): for explicitly named endpoints, which of
+  TLS 1.0/1.1/1.2/1.3 are accepted, the negotiated cipher, and certificate
+  validity (expired/expiring/self-signed). Read-only, no port scanning, no
+  exploit probes, no credentials.
+- Local file-permission posture (Surface C): for paths you name, over-permissive
+  private keys and credential files, world-writable files/directories, and loose
+  .ssh/.gnupg permissions — inspecting permission bits only (never file
+  contents), never following symlinks, unprivileged and read-only (Unix).
 - Reports and integrations: JSON, Markdown, HTML, baseline diff, explanations,
   bounded exposure graph, remediation simulation, governance, SARIF, webhook,
   MCP stdio, and multi-domain plans.
@@ -38,11 +49,39 @@ default `audit` mode removes crackable hash material from reports. Only an
 authorised assessment that needs that material should use both `--mode full`
 and `--export-hashes`.
 
+The email module is read-only and needs neither credentials nor a Domain
+Controller — only a domain and a resolver:
+
+```bash
+./target/release/diego --modules email --domain example.com \
+  --dns-resolver 1.1.1.1 --format json --output email.json
+```
+
+The TLS module is read-only and probes only the endpoints you name (no port
+scanning); it needs no credentials and no Domain Controller:
+
+```bash
+./target/release/diego --modules tls --domain n/a \
+  --tls-target www.example.com:443,mail.example.com:443 --format json
+```
+
+The file-permission module scans only the paths you name, reads permission
+bits (not contents), and needs no credentials:
+
+```bash
+./target/release/diego --modules fs --domain n/a \
+  --fs-path ~/.ssh,~/.aws --format json
+```
+
 ## Common options
 
 | Option | Purpose |
 |---|---|
-| `--modules <LIST>` | Run `kerberos`, `ldap`, `passive`, or `all` |
+| `--modules <LIST>` | Run `kerberos`, `ldap`, `passive`, `email`, `tls`, `fs`, or `all` |
+| `--dns-resolver <ADDR>` | Resolver for `email` checks (ip or ip:port; default: system) |
+| `--dkim-selectors <LIST>` | Comma-separated DKIM selectors for `email` (default: common set) |
+| `--tls-target <LIST>` | Comma-separated `host[:port]` endpoints for the `tls` module |
+| `--fs-path <LIST>` | Comma-separated files/dirs for the `fs` permission-posture module |
 | `--format <FORMAT>` | Write `json`, `markdown`, or `html` |
 | `--output <PATH>` | Write the primary report to a file |
 | `--baseline <PATH>` | Compare the current report with a prior report |

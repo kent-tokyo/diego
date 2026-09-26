@@ -1,8 +1,8 @@
 [package]
 name = "diego"
-version = "0.22.0"
+version = "0.23.0"
 edition = "2024"
-description = "Pure Rust Active Directory security diagnostic agent. AS-REP Roasting, Kerberoasting, LDAP enumeration, OPSEC-friendly with Claude API analysis and MCP server mode."
+description = "Pure Rust, read-only security posture diagnostic agent for Active Directory, email, TLS, and local file permissions."
 license = "MIT"
 authors = ["kent-tokyo <kent-tokyo@users.noreply.github.com>"]
 repository = "https://github.com/kent-tokyo/diego"
