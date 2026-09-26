@@ -449,7 +449,7 @@ mod tests {
     fn test_capture_protocol_consistency() {
         let http = check_http_basic(b"Authorization: Basic test\r\n", "1.1.1.1", "2.2.2.2", 80);
         let ftp = check_ftp(b"USER admin\r\n", "1.1.1.1", "2.2.2.2", 21);
-        let smb = check_smb_cleartext(&vec![0xFF, b'S', b'M', b'B', 0x73], "1.1.1.1", "2.2.2.2", 445);
+        let smb = check_smb_cleartext(&[0xFF, b'S', b'M', b'B', 0x73], "1.1.1.1", "2.2.2.2", 445);
 
         assert!(http.is_some());
         assert!(ftp.is_some());

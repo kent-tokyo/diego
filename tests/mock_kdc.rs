@@ -78,6 +78,10 @@ async fn spawn_mock_kdc(response: Vec<u8>) -> SocketAddr {
     addr
 }
 
+fn test_nonce() -> u32 {
+    rand::random()
+}
+
 #[tokio::test]
 async fn test_asrep_roasting_full_flow() {
     let fake_cipher = b"fakehashbytes1234567890abcdef01".to_vec();
@@ -86,7 +90,7 @@ async fn test_asrep_roasting_full_flow() {
     let addr = spawn_mock_kdc(response).await;
 
     // Build and send an AS-REQ
-    let req = build_asrep_roast_request("alice", "CORP.LOCAL", 0x1234abcd);
+    let req = build_asrep_roast_request("alice", "CORP.LOCAL", test_nonce());
     let raw = mod_send_kerberos_tcp(&addr, &req, 5)
         .await
         .expect("TCP send/recv failed");
@@ -99,7 +103,7 @@ async fn test_asrep_roasting_full_flow() {
             assert_eq!(enc.cipher, fake_cipher, "cipher mismatch");
 
             let hash = format_asrep_18200(enc.etype, "alice", "CORP.LOCAL", &enc.cipher);
-            assert!(hash.starts_with("$krb5asrep$"), "bad hashcat format: {}", hash);
+            assert!(hash.starts_with("$krb5asrep$"), "bad hashcat format");
             assert!(hash.contains("alice@CORP.LOCAL"), "missing username");
         }
         other => panic!("Expected AsRep, got {:?}", other),
@@ -125,7 +129,7 @@ async fn test_preauth_required_response() {
     framed.extend_from_slice(&krb_err);
 
     let addr = spawn_mock_kdc(framed).await;
-    let req = build_asrep_roast_request("bob", "CORP.LOCAL", 0xdeadbeef);
+    let req = build_asrep_roast_request("bob", "CORP.LOCAL", test_nonce());
     let raw = mod_send_kerberos_tcp(&addr, &req, 5).await.unwrap();
 
     match parse_kdc_response(&raw).unwrap() {
@@ -144,7 +148,7 @@ async fn test_malformed_asrep_too_short_cipher() {
     let response = build_fake_asrep(ETYPE_RC4_HMAC, &too_short_cipher);
 
     let addr = spawn_mock_kdc(response).await;
-    let req = build_asrep_roast_request("alice", "CORP.LOCAL", 0x1234abcd);
+    let req = build_asrep_roast_request("alice", "CORP.LOCAL", test_nonce());
     let raw = mod_send_kerberos_tcp(&addr, &req, 5)
         .await
         .expect("TCP send/recv failed");
@@ -186,7 +190,7 @@ async fn test_malformed_asrep_missing_enc_part() {
     response.extend_from_slice(&as_rep);
 
     let addr = spawn_mock_kdc(response).await;
-    let req = build_asrep_roast_request("alice", "CORP.LOCAL", 0x1234abcd);
+    let req = build_asrep_roast_request("alice", "CORP.LOCAL", test_nonce());
     let raw = mod_send_kerberos_tcp(&addr, &req, 5)
         .await
         .expect("TCP send/recv failed");
@@ -207,7 +211,7 @@ async fn test_invalid_response_tag() {
     framed.extend_from_slice(&response);
 
     let addr = spawn_mock_kdc(framed).await;
-    let req = build_asrep_roast_request("alice", "CORP.LOCAL", 0x1234abcd);
+    let req = build_asrep_roast_request("alice", "CORP.LOCAL", test_nonce());
     let raw = mod_send_kerberos_tcp(&addr, &req, 5)
         .await
         .expect("TCP send/recv failed");
@@ -226,7 +230,7 @@ async fn test_truncated_kdc_response() {
     framed.extend_from_slice(&response);
 
     let addr = spawn_mock_kdc(framed).await;
-    let req = build_asrep_roast_request("alice", "CORP.LOCAL", 0x1234abcd);
+    let req = build_asrep_roast_request("alice", "CORP.LOCAL", test_nonce());
     let raw = mod_send_kerberos_tcp(&addr, &req, 5)
         .await
         .expect("TCP send/recv failed");

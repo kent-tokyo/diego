@@ -409,7 +409,7 @@ mod tests {
     #[test]
     fn test_asrep_candidates_attributes() {
         // Verify expected attributes are queried
-        let attrs = vec!["sAMAccountName", "userAccountControl", "distinguishedName"];
+        let attrs = ["sAMAccountName", "userAccountControl", "distinguishedName"];
         assert_eq!(attrs.len(), 3);
         assert!(attrs.contains(&"sAMAccountName"));
         assert!(attrs.contains(&"distinguishedName"));
@@ -418,7 +418,7 @@ mod tests {
     #[test]
     fn test_spn_accounts_includes_encryption_types() {
         // Verify encryption type attribute is included
-        let attrs = vec![
+        let attrs = [
             "sAMAccountName",
             "servicePrincipalName",
             "msDS-SupportedEncryptionTypes",
@@ -433,7 +433,7 @@ mod tests {
     #[test]
     fn test_stale_password_attributes() {
         // Verify pwdLastSet is included for age calculation
-        let attrs = vec![
+        let attrs = [
             "sAMAccountName",
             "pwdLastSet",
             "servicePrincipalName",

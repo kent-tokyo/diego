@@ -21,7 +21,9 @@ where a capability is limited, we say so.
 
 - **Not an exploitation framework.** diego does not execute code on remote
   hosts, move laterally, dump LSASS, perform DCSync, or persist. It requests and
-  captures hashes for *offline* analysis; it does not crack them.
+  captures Kerberos evidence for offline analysis; it does not crack hashes.
+  Audit output redacts crackable material unless full export is explicitly
+  requested for an authorised assessment.
 - **Not a detection-evasion guarantee.** Jitter smooths timing/volume; it does
   not hide the behavioural signature of a request (see below).
 - **Not a full graph collector.** diego collects *findings*, not the complete
@@ -67,6 +69,8 @@ only the former.
   **Medium confidence** and require human review; deterministic findings
   (captured hashes, UAC flags) are High confidence.
 - **Offline only** for hash material — no cracking is performed or assisted.
+- **No keytab/TGT authentication yet:** detection of local Kerberos artifacts is
+  not GSSAPI/SASL support; provide a password until that support is implemented.
 - **Performance at scale** is not yet benchmarked against a large lab forest;
   see [BENCHMARKS.md](BENCHMARKS.md) (results pending).
 

@@ -98,12 +98,10 @@ impl DiagnosticModule for KerberosModule {
                     Ok(KdcResponse::PreauthRequired) => {
                         // Normal — account requires preauth
                     }
-                    Ok(KdcResponse::Error(code)) => {
-                        eprintln!("[!] KRB-ERROR {} for user {}", code, username);
-                    }
-                    Err(e) => eprintln!("[!] Parse error for {}: {}", username, e),
+                    Ok(KdcResponse::Error(code)) => eprintln!("[!] KRB-ERROR {}", code),
+                    Err(e) => eprintln!("[!] AS-REP response parse error: {}", e),
                 },
-                Err(e) => eprintln!("[!] Network error for {}: {}", username, e),
+                Err(e) => eprintln!("[!] AS-REP network error: {}", e),
             }
 
             // OPSEC: jitter (already computed before await above)
@@ -112,7 +110,7 @@ impl DiagnosticModule for KerberosModule {
 
         // ── Kerberoasting ────────────────────────────────────────────────────
         if !self.ldap_ctx.spn_accounts.is_empty() {
-            eprintln!("[*] Kerberos: Kerberoasting {} SPN accounts", self.ldap_ctx.spn_accounts.len());
+            eprintln!("[*] Kerberos: requesting TGS tickets for discovered SPNs");
 
             let tgt_nonce: u32 = rand::random();
             match acquire_tgt(&config, &dc_addr, &realm, tgt_nonce).await {

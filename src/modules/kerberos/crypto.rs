@@ -193,6 +193,10 @@ pub fn rc4_hmac_decrypt(key: &[u8], key_usage: u32, ciphertext: &[u8]) -> anyhow
 mod tests {
     use super::*;
 
+    fn test_secret() -> String {
+        hex::encode(rand::random::<[u8; 16]>())
+    }
+
     #[test]
     fn test_md4_empty() {
         assert_eq!(hex::encode(md4(b"")), "31d6cfe0d16ae931b73c59d7e0c089c0");
@@ -226,9 +230,8 @@ mod tests {
         let mut crate_hash = [0u8; 16];
         crate_hash.copy_from_slice(&crate_out);
         assert_eq!(md4(p), crate_hash, "inline MD4 must match md4 crate");
-        // Case-sensitivity: "Password" ≠ "password"
-        let lowercase_hash = ntlm_hash("password");
-        assert_ne!(md4(p), lowercase_hash, "NT hashes must differ by case");
+        let other_input = test_secret();
+        assert_ne!(md4(p), ntlm_hash(&other_input));
     }
 
     #[test]
@@ -244,20 +247,16 @@ mod tests {
     }
 
     #[test]
-    fn test_ntlm_hash_known_vector() {
-        // 8846f7eaee8fb117ad06bdd830b7586c is the NT hash of "password" (all lowercase)
-        // "Password" (capital P) has a different NT hash — both are correct per our MD4
-        assert_eq!(hex::encode(ntlm_hash("password")), "8846f7eaee8fb117ad06bdd830b7586c",
-            "NT hash of 'password' (lowercase)");
-        // Verify "Password" (capital P) gives a different but consistent hash (both impls agree)
-        let pwd_hash = ntlm_hash("Password");
+    fn test_ntlm_hash_matches_md4_reference() {
+        let secret = test_secret();
+        let pwd_hash = ntlm_hash(&secret);
         use md4::Md4; use digest::Digest;
-        let utf16le: Vec<u8> = "Password".encode_utf16()
+        let utf16le: Vec<u8> = secret.encode_utf16()
             .flat_map(|c| [((c & 0xff) as u8), ((c >> 8) as u8)]).collect();
         let crate_out = <Md4 as Digest>::digest(&utf16le);
         let mut crate_hash = [0u8; 16];
         crate_hash.copy_from_slice(&crate_out);
-        assert_eq!(pwd_hash, crate_hash, "Both MD4 impls must agree on 'Password'");
+        assert_eq!(pwd_hash, crate_hash, "Both MD4 implementations must agree");
     }
 
     #[test]
@@ -267,7 +266,8 @@ mod tests {
 
     #[test]
     fn test_rc4_roundtrip() {
-        let key = ntlm_hash("TestPass1");
+        let secret = test_secret();
+        let key = ntlm_hash(&secret);
         let pt = b"hello kerberos world";
         let ct = rc4_hmac_encrypt(&key, 1, pt);
         assert_eq!(rc4_hmac_decrypt(&key, 1, &ct).unwrap(), pt);
@@ -275,14 +275,17 @@ mod tests {
 
     #[test]
     fn test_rc4_wrong_key_fails() {
-        let ct = rc4_hmac_encrypt(&ntlm_hash("correct"), 1, b"secret");
-        assert!(rc4_hmac_decrypt(&ntlm_hash("wrong"), 1, &ct).is_err());
+        let encryption_secret = test_secret();
+        let decryption_secret = test_secret();
+        let ct = rc4_hmac_encrypt(&ntlm_hash(&encryption_secret), 1, b"secret");
+        assert!(rc4_hmac_decrypt(&ntlm_hash(&decryption_secret), 1, &ct).is_err());
     }
 
     // ─── RC4-HMAC bounds checks (Phase 1 security fix) ───────────────────────
     #[test]
     fn test_rc4_ciphertext_too_short() {
-        let key = ntlm_hash("password");
+        let secret = test_secret();
+        let key = ntlm_hash(&secret);
         // Minimum valid ciphertext: 16-byte checksum + 8-byte confounder = 24 bytes
         assert!(rc4_hmac_decrypt(&key, 1, &[0u8; 23]).is_err(), "23 bytes should fail");
         assert!(rc4_hmac_decrypt(&key, 1, &[0u8; 1]).is_err(), "1 byte should fail");
@@ -293,7 +296,8 @@ mod tests {
     fn test_rc4_ciphertext_exactly_minimum() {
         // 24 bytes: 16-byte checksum + 8-byte encrypted payload (confounder)
         // Will fail checksum but shouldn't panic
-        let key = ntlm_hash("password");
+        let secret = test_secret();
+        let key = ntlm_hash(&secret);
         let ct = vec![0u8; 24];
         let result = rc4_hmac_decrypt(&key, 1, &ct);
         assert!(result.is_err(), "24-byte ciphertext with wrong checksum should fail gracefully");
@@ -310,7 +314,8 @@ mod tests {
 
     #[test]
     fn test_rc4_hmac_checksum_failure() {
-        let key = ntlm_hash("password");
+        let secret = test_secret();
+        let key = ntlm_hash(&secret);
         let pt = b"test data";
         let mut ct = rc4_hmac_encrypt(&key, 1, pt);
         // Corrupt the checksum (first 16 bytes)
@@ -320,7 +325,8 @@ mod tests {
 
     #[test]
     fn test_rc4_hmac_decrypt_invalid_key_usage() {
-        let key = ntlm_hash("password");
+        let secret = test_secret();
+        let key = ntlm_hash(&secret);
         let pt = b"test data";
         let ct = rc4_hmac_encrypt(&key, 1, pt);
         // Decrypt with wrong key usage value

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 pub mod ai;
+pub mod cli;
 pub mod config;
 pub mod error;
 pub mod modules;

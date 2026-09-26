@@ -1,8 +1,8 @@
 name: Release
 
 # Tag-triggered release: builds the static Linux (musl) and Windows binaries and
-# attaches them to a GitHub Release. Cut a release by pushing a tag, e.g.:
-#   git tag v0.6.0 && git push origin v0.6.0
+# attaches them to a GitHub Release. Cut a release by pushing a matching tag,
+# for example: git tag vX.Y.Z && git push origin vX.Y.Z
 
 on:
   push:
@@ -61,6 +61,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish crate to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -75,14 +80,10 @@ jobs:
             See the [CHANGELOG](https://github.com/kent-tokyo/diego/blob/main/CHANGELOG.md) for the full, categorised list (Added / Changed / Fixed / Security).
 
             ## Migration
-            - Safe output is now the default. Roastable findings remain visible,
-              but crackable hash material requires `--mode full --export-hashes`.
-            - New flags: `--format html`, `--baseline <prior.json>`, `--mode`,
-              and `--export-hashes`.
-            - Reports now include a `confidence` field; baseline JSON from older
-              builds still loads (confidence defaults to HIGH).
-            - Use `--explain <finding-id>` to inspect detector provenance,
-              evidence, confidence rationale, and remediation.
+            - Safe output is the default. Crackable hash material requires both
+              `--mode full` and `--export-hashes`.
+            - Check the version's CHANGELOG section before updating report
+              consumers or automation.
 
             ## Known limitations
             - **Detection:** diego avoids host-based EDR runtimes, but DC-side

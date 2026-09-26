@@ -6,6 +6,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::net::IpAddr;
 
@@ -48,6 +49,70 @@ pub struct FleetReport {
     pub generated_at: DateTime<Utc>,
     pub results: Vec<TargetResult>,
     pub summary: Summary,
+    pub execution: FleetExecution,
+}
+
+/// Bounded local execution metrics for a fleet run. These are operational
+/// measurements, not estimates of directory size or network-wide coverage.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FleetExecution {
+    pub selected_targets: usize,
+    pub completed_targets: usize,
+    pub failed_targets: usize,
+    #[serde(default)]
+    pub max_parallel: usize,
+    pub duration_ms: u64,
+}
+
+/// Integrity-protected local state for resuming a plan.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanCheckpoint {
+    pub schema: String,
+    pub plan_fingerprint: String,
+    pub fleet: FleetReport,
+    pub checksum: String,
+}
+
+impl PlanCheckpoint {
+    pub fn new(plan: &ScanPlan, fleet: &FleetReport) -> anyhow::Result<Self> {
+        let mut checkpoint = Self {
+            schema: "diego.plan-checkpoint.v1".into(),
+            plan_fingerprint: fingerprint(plan)?,
+            fleet: fleet.clone(),
+            checksum: String::new(),
+        };
+        checkpoint.checksum = checkpoint.calculate_checksum()?;
+        Ok(checkpoint)
+    }
+
+    pub fn verify(&self, plan: &ScanPlan) -> anyhow::Result<()> {
+        if self.schema != "diego.plan-checkpoint.v1" {
+            anyhow::bail!("unsupported plan checkpoint schema: {}", self.schema);
+        }
+        validate_checkpoint(plan, &self.fleet)?;
+        if self.plan_fingerprint != fingerprint(plan)? {
+            anyhow::bail!("checkpoint plan fingerprint does not match plan");
+        }
+        if self.checksum != self.calculate_checksum()? {
+            anyhow::bail!("plan checkpoint checksum mismatch");
+        }
+        Ok(())
+    }
+
+    fn calculate_checksum(&self) -> anyhow::Result<String> {
+        let unsigned = serde_json::json!({
+            "schema": self.schema,
+            "planFingerprint": self.plan_fingerprint,
+            "fleet": self.fleet,
+        });
+        Ok(hex::encode(Sha256::digest(serde_json::to_vec(&unsigned)?)))
+    }
+}
+
+fn fingerprint(plan: &ScanPlan) -> anyhow::Result<String> {
+    Ok(hex::encode(Sha256::digest(serde_json::to_vec(plan)?)))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +123,9 @@ pub struct TargetResult {
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub report: Option<Report>,
+    /// Bounded defensive path summary; never contains raw evidence.
+    #[serde(rename = "attackPath", skip_serializing_if = "Option::is_none")]
+    pub attack_path: Option<super::attack_path::AttackPathReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -112,8 +180,52 @@ impl ScanPlan {
     }
 }
 
+/// Ensure a checkpoint belongs to the exact plan target set it will resume.
+pub fn validate_checkpoint(plan: &ScanPlan, checkpoint: &FleetReport) -> anyhow::Result<()> {
+    if checkpoint.plan_version != plan.version {
+        anyhow::bail!(
+            "checkpoint plan version {} does not match {}",
+            checkpoint.plan_version,
+            plan.version
+        );
+    }
+    if checkpoint.scope != plan.scope {
+        anyhow::bail!(
+            "checkpoint scope {} does not match {}",
+            checkpoint.scope,
+            plan.scope
+        );
+    }
+    let targets: std::collections::HashMap<&str, (&str, &str)> = plan
+        .targets
+        .iter()
+        .map(|target| (target.id.as_str(), (target.domain.as_str(), target.dc.as_str())))
+        .collect();
+    let mut seen = HashSet::new();
+    for result in &checkpoint.results {
+        if !seen.insert(result.id.as_str()) {
+            anyhow::bail!("checkpoint contains duplicate target result: {}", result.id);
+        }
+        let Some((domain, dc)) = targets.get(result.id.as_str()) else {
+            anyhow::bail!("checkpoint target is not present in plan: {}", result.id);
+        };
+        if result.domain != *domain || result.dc != *dc {
+            anyhow::bail!("checkpoint target metadata changed: {}", result.id);
+        }
+    }
+    Ok(())
+}
+
 impl FleetReport {
     pub fn new(plan: &ScanPlan, results: Vec<TargetResult>) -> Self {
+        Self::with_duration(plan, results, 0)
+    }
+
+    pub fn with_duration(
+        plan: &ScanPlan,
+        results: Vec<TargetResult>,
+        duration_ms: u64,
+    ) -> Self {
         let mut summary = Summary {
             critical: 0,
             high: 0,
@@ -122,6 +234,14 @@ impl FleetReport {
             info: 0,
             total: 0,
         };
+        let completed_targets = results
+            .iter()
+            .filter(|result| result.status == "completed")
+            .count();
+        let failed_targets = results
+            .iter()
+            .filter(|result| result.status == "failed")
+            .count();
         for result in &results {
             if let Some(report) = &result.report {
                 summary.critical += report.summary.critical;
@@ -140,6 +260,13 @@ impl FleetReport {
             generated_at: Utc::now(),
             results,
             summary,
+            execution: FleetExecution {
+                selected_targets: completed_targets + failed_targets,
+                completed_targets,
+                failed_targets,
+                max_parallel: plan.max_parallel,
+                duration_ms,
+            },
         }
     }
 }
@@ -192,5 +319,89 @@ mod tests {
         p.targets[1].enabled = false;
         p.validate().unwrap();
         assert_eq!(p.selected_targets().len(), 1);
+    }
+
+    #[test]
+    fn fleet_target_path_is_redacted_and_optional_on_failures() {
+        let report = crate::report::sample::sample_report();
+        let path = crate::report::attack_path::build(&report);
+        let result = TargetResult {
+            id: "root".into(),
+            domain: report.domain.clone(),
+            dc: "10.0.0.1".into(),
+            status: "completed".into(),
+            report: Some(report),
+            attack_path: Some(path),
+            error: None,
+        };
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["attackPath"]["schema"], "diego.attack-path.v1");
+        assert_eq!(json["attackPath"]["from"], "standard_user");
+        assert!(json["attackPath"].get("evidence").is_none());
+
+        let failed = TargetResult {
+            id: "failed".into(),
+            domain: "corp.example".into(),
+            dc: "10.0.0.2".into(),
+            status: "failed".into(),
+            report: None,
+            attack_path: None,
+            error: Some("unavailable".into()),
+        };
+        let failed_json = serde_json::to_value(failed).unwrap();
+        assert!(failed_json.get("attackPath").is_none());
+    }
+
+    #[test]
+    fn execution_metrics_count_result_states() {
+        let results = vec![
+            TargetResult {
+                id: "ok".into(),
+                domain: "corp.example".into(),
+                dc: "10.0.0.1".into(),
+                status: "completed".into(),
+                report: None,
+                attack_path: None,
+                error: None,
+            },
+            TargetResult {
+                id: "bad".into(),
+                domain: "child.corp.example".into(),
+                dc: "10.0.0.2".into(),
+                status: "failed".into(),
+                report: None,
+                attack_path: None,
+                error: Some("offline".into()),
+            },
+        ];
+        let fleet = FleetReport::with_duration(&plan(), results, 42);
+        assert_eq!(fleet.execution.selected_targets, 2);
+        assert_eq!(fleet.execution.completed_targets, 1);
+        assert_eq!(fleet.execution.failed_targets, 1);
+        assert_eq!(fleet.execution.max_parallel, 1);
+        assert_eq!(fleet.execution.duration_ms, 42);
+    }
+
+    #[test]
+    fn checkpoint_validation_rejects_changed_target_metadata() {
+        let mut checkpoint = FleetReport::new(&plan(), Vec::new());
+        checkpoint.results.push(TargetResult {
+            id: "root".into(),
+            domain: "changed.example".into(),
+            dc: "10.0.0.1".into(),
+            status: "completed".into(),
+            report: None,
+            attack_path: None,
+            error: None,
+        });
+        assert!(validate_checkpoint(&plan(), &checkpoint).is_err());
+    }
+
+    #[test]
+    fn checkpoint_rejects_tampering() {
+        let fleet = FleetReport::new(&plan(), Vec::new());
+        let mut checkpoint = PlanCheckpoint::new(&plan(), &fleet).unwrap();
+        checkpoint.fleet.scope = "changed".into();
+        assert!(checkpoint.verify(&plan()).is_err());
     }
 }

@@ -64,7 +64,7 @@ impl DiagnosticModule for LdapModule {
         .success()
         .map_err(|e| anyhow::anyhow!("LDAP bind failed: {}", e))?;
 
-        eprintln!("[+] LDAP: authenticated as {}@{}", config.username, config.domain);
+        eprintln!("[+] LDAP: authenticated");
 
         // ── Fetch (I/O) ──────────────────────────────────────────────────────
         eprintln!("[*] LDAP: querying AS-REP Roasting candidates");
