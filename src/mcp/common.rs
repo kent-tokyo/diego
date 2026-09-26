@@ -82,7 +82,7 @@ pub(super) fn domain_to_base_dn(domain: &str) -> String {
         .join(",")
 }
 
-const TRUSTED_TO_AUTH_FOR_DELEGATION: u32 = 0x1000000;
+pub(super) const TRUSTED_TO_AUTH_FOR_DELEGATION: u32 = 0x1000000;
 
 pub(super) fn has_protocol_transition(uac: u32) -> bool {
     uac & TRUSTED_TO_AUTH_FOR_DELEGATION != 0

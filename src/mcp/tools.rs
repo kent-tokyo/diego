@@ -19,14 +19,20 @@ use crate::modules::ldap::queries::{
 use crate::modules::passive::llmnr::{capture_llmnr, capture_nbtns};
 use crate::report::{Finding, Severity};
 
-use super::common::{AdRequest, domain_to_base_dn, get_str, get_timeout, has_protocol_transition};
-use super::schema::{make_tool as schema_make_tool, tool_list as schema_tool_list};
+use super::common::{AdRequest, get_str, get_timeout, has_protocol_transition};
+use super::schema::tool_list as schema_tool_list;
+
+#[cfg(test)]
+use super::common::{domain_to_base_dn, TRUSTED_TO_AUTH_FOR_DELEGATION};
+#[cfg(test)]
+use super::schema::make_tool as schema_make_tool;
 
 /// Returns the static list of MCP tools this server exposes.
 pub fn tool_list() -> Vec<Value> {
     schema_tool_list()
 }
 
+#[cfg(test)]
 fn make_tool(name: &str, description: &str, schema: Value) -> Value {
     schema_make_tool(name, description, schema)
 }

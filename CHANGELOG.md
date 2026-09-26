@@ -5,7 +5,7 @@ All notable changes to diego are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.22.0] - 2026-09-26
 
 ### Documentation
 - Corrected credential guidance: keytab and Kerberos-cache detection are not
@@ -19,8 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed unsupported keytab and Kerberos-cache password fallbacks; authentication
   now uses an explicitly supplied password, `DIEGO_PASSWORD`, or an interactive
   prompt.
-
-## [0.22.0] - 2026-09-01
 
 ### Added
 - Added `--plan-validate` for credential-free, network-free scan plan validation.
