@@ -387,9 +387,13 @@ fn parse_der_octet_string(data: &[u8]) -> anyhow::Result<&[u8]> {
 mod tests {
     use super::*;
 
+    fn test_nonce() -> u32 {
+        rand::random()
+    }
+
     #[test]
     fn test_build_asrep_roast_request_has_framing() {
-        let req = build_asrep_roast_request("alice", "CORP.LOCAL", 0xdeadbeef);
+        let req = build_asrep_roast_request("alice", "CORP.LOCAL", test_nonce());
         // First 4 bytes are the TCP length prefix
         assert!(req.len() > 4);
         let body_len = u32::from_be_bytes(req[..4].try_into().unwrap()) as usize;
@@ -398,7 +402,7 @@ mod tests {
 
     #[test]
     fn test_build_asrep_roast_starts_with_application_tag() {
-        let req = build_asrep_roast_request("alice", "CORP.LOCAL", 1);
+        let req = build_asrep_roast_request("alice", "CORP.LOCAL", test_nonce());
         // After 4-byte framing: APPLICATION [10] = 0x6a
         assert_eq!(req[4], 0x6a);
     }
@@ -415,12 +419,8 @@ mod tests {
     // ─── DER parser edge cases (Phase 1 security fix) ────────────────────────
     #[test]
     fn test_der_length_overflow_panics() {
-        // DER length > 16MB should panic
-        // We can't easily create > 16MB data, but we can patch the length_bytes function behavior
-        let payload = vec![0u8; 100];
-        // This would panic at DER encoding time with > 16MB
-        // For now, we verify the check exists in length_bytes
-        assert!(true, "length_bytes panics on > 0xFFFFFF — verified by code inspection");
+        let result = std::panic::catch_unwind(|| length_bytes(0x1_000_000));
+        assert!(result.is_err(), "DER lengths above 16MB must be rejected");
     }
 
     #[test]

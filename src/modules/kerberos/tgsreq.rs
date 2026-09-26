@@ -348,7 +348,7 @@ pub async fn kerberoast(
             let raw = match super::mod_send_kerberos_tcp(&dc_addr, &req, timeout_secs).await {
                 Ok(r) => r,
                 Err(e) => {
-                    eprintln!("[!] TGS-REQ failed for {}: {}", spn, e);
+                    eprintln!("[!] TGS-REQ failed: {}", e);
                     continue;
                 }
             };
@@ -404,7 +404,7 @@ pub async fn kerberoast(
                     .with_mitre("T1558.003"));
                 }
                 Err(e) => {
-                    eprintln!("[!] Failed to parse TGS-REP for {}: {}", spn, e);
+                    eprintln!("[!] Failed to parse TGS-REP: {}", e);
                 }
             }
         }
@@ -429,6 +429,15 @@ fn frame_kerberos_tcp(data: Vec<u8>) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_nonce() -> u32 {
+        rand::random()
+    }
+
+    fn test_secret(nonce: u32) -> String {
+        let _ = nonce;
+        hex::encode(rand::random::<[u8; 16]>())
+    }
 
     // ─── Phase 1: Authenticator Construction Tests ────────────────────────
 
@@ -507,7 +516,9 @@ mod tests {
 
     #[test]
     fn test_build_authenticated_asreq_basic() {
-        let req = build_authenticated_asreq("alice", "CORP.LOCAL", "Password123", 0x12345678);
+        let nonce = test_nonce();
+        let secret = test_secret(nonce);
+        let req = build_authenticated_asreq("alice", "CORP.LOCAL", &secret, nonce);
 
         // Should have TCP framing: 4-byte length prefix
         assert!(req.len() > 4);
@@ -520,18 +531,23 @@ mod tests {
 
     #[test]
     fn test_build_authenticated_asreq_different_realms() {
-        let req1 = build_authenticated_asreq("user", "CORP.LOCAL", "pass", 0x1);
-        let req2 = build_authenticated_asreq("user", "EXAMPLE.COM", "pass", 0x1);
+        let nonce = test_nonce();
+        let secret = test_secret(nonce);
+        let req1 = build_authenticated_asreq("user", "CORP.LOCAL", &secret, nonce);
+        let req2 = build_authenticated_asreq("user", "EXAMPLE.COM", &secret, nonce);
 
         // Different realms should produce different requests
         assert_ne!(req1, req2);
-        assert!(req1.len() > 0 && req2.len() > 0);
+        assert!(!req1.is_empty() && !req2.is_empty());
     }
 
     #[test]
     fn test_build_authenticated_asreq_different_passwords() {
-        let req1 = build_authenticated_asreq("user", "CORP.LOCAL", "pass1", 0x1);
-        let req2 = build_authenticated_asreq("user", "CORP.LOCAL", "pass2", 0x1);
+        let nonce = test_nonce();
+        let first_secret = test_secret(nonce);
+        let second_secret = test_secret(nonce.wrapping_add(1));
+        let req1 = build_authenticated_asreq("user", "CORP.LOCAL", &first_secret, nonce);
+        let req2 = build_authenticated_asreq("user", "CORP.LOCAL", &second_secret, nonce);
 
         // Different passwords should produce different requests
         assert_ne!(req1, req2);
@@ -539,8 +555,11 @@ mod tests {
 
     #[test]
     fn test_build_authenticated_asreq_different_nonces() {
-        let req1 = build_authenticated_asreq("user", "CORP.LOCAL", "pass", 0x11111111);
-        let req2 = build_authenticated_asreq("user", "CORP.LOCAL", "pass", 0x22222222);
+        let first_nonce = test_nonce();
+        let second_nonce = first_nonce.wrapping_add(1);
+        let secret = test_secret(first_nonce);
+        let req1 = build_authenticated_asreq("user", "CORP.LOCAL", &secret, first_nonce);
+        let req2 = build_authenticated_asreq("user", "CORP.LOCAL", &secret, second_nonce);
 
         // Different nonces should produce different requests
         assert_ne!(req1, req2);
@@ -558,7 +577,7 @@ mod tests {
             "ldap/dc01.corp.local",
             &tgt_ticket,
             &session_key,
-            0xdeadbeef,
+            test_nonce(),
         );
 
         // Should have TCP framing
@@ -574,9 +593,10 @@ mod tests {
     fn test_build_tgsreq_different_spns() {
         let tgt_ticket = vec![0x61, 0x82, 0x01, 0x00];
         let session_key = vec![0u8; 16];
+        let nonce = test_nonce();
 
-        let req1 = build_tgsreq("alice", "CORP.LOCAL", "ldap/dc01", &tgt_ticket, &session_key, 0x1);
-        let req2 = build_tgsreq("alice", "CORP.LOCAL", "http/web01", &tgt_ticket, &session_key, 0x1);
+        let req1 = build_tgsreq("alice", "CORP.LOCAL", "ldap/dc01", &tgt_ticket, &session_key, nonce);
+        let req2 = build_tgsreq("alice", "CORP.LOCAL", "http/web01", &tgt_ticket, &session_key, nonce);
 
         // Different SPNs should produce different requests
         assert_ne!(req1, req2);
@@ -587,9 +607,10 @@ mod tests {
         let tgt_ticket = vec![0x61, 0x82, 0x01, 0x00];
         let key1 = vec![0u8; 16];
         let key2 = vec![1u8; 16];
+        let nonce = test_nonce();
 
-        let req1 = build_tgsreq("alice", "CORP.LOCAL", "ldap/dc01", &tgt_ticket, &key1, 0x1);
-        let req2 = build_tgsreq("alice", "CORP.LOCAL", "ldap/dc01", &tgt_ticket, &key2, 0x1);
+        let req1 = build_tgsreq("alice", "CORP.LOCAL", "ldap/dc01", &tgt_ticket, &key1, nonce);
+        let req2 = build_tgsreq("alice", "CORP.LOCAL", "ldap/dc01", &tgt_ticket, &key2, nonce);
 
         // Different session keys should produce different requests (Authenticator encrypted differently)
         assert_ne!(req1, req2);
@@ -690,7 +711,8 @@ mod tests {
         // We can't test without a real encrypted AS-REP, but we can verify error handling
 
         let ciphertext = vec![0u8; 16]; // Too short to be valid (needs >= 24 bytes)
-        let result = decrypt_asrep(&ciphertext, "password");
+        let secret = test_secret(test_nonce());
+        let result = decrypt_asrep(&ciphertext, &secret);
 
         // Should fail on bounds check
         assert!(result.is_err(), "Ciphertext too short should fail");

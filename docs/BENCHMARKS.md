@@ -6,12 +6,6 @@
 > stance on claims vs. evidence in the README's *Detection considerations* and
 > [THREAT_MODEL.md](THREAT_MODEL.md).
 
-## Why this document exists
-
-"How fast is it / how heavy is it at scale?" is a fair adoption question. Rather
-than quote unverified figures, this page pins down *how* we will measure so the
-numbers, once produced, are reproducible and comparable.
-
 ## What we measure
 
 | Metric | Definition |
@@ -50,8 +44,8 @@ cargo build --release
 jq '.summary' run.json
 ```
 
-Record: diego version (`diego --version` / Cargo.toml), DC OS/version, network
-RTT to the DC, and the jitter setting used.
+Record the diego version, DC OS/version, network RTT, jitter setting, module
+selection, and a redacted environment description.
 
 ## Results
 
@@ -61,8 +55,8 @@ RTT to the DC, and the jitter setting used.
 | Medium   | —             | TBD     | TBD      | TBD          | TBD      |
 | Large    | —             | TBD     | TBD      | TBD          | TBD      |
 
-_Results will be filled in from a controlled lab run. Until then, treat the
-table as **unmeasured**, not zero._
+Until a controlled lab run fills this table, every performance claim is
+**unmeasured**, not zero.
 
 ## Contributing measurements
 

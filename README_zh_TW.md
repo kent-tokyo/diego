@@ -14,7 +14,7 @@ cargo build --release
   --username jdoe --modules all --format json --output report.json
 ~~~
 
-一般掃描需要 --dc、--domain、--username。密碼依 --password、DIEGO_PASSWORD、keytab/TGT 快取、互動提示的順序取得。預設 --mode audit 會隱藏可破解雜湊；只有在獲授權且確有需要時使用 --mode full --export-hashes。常用選項還包括 --baseline、--explain、--sarif-output、--webhook-output、--plan-validate、--plan-state、--mcp 和 --mcp-init。
+一般掃描需要 --dc、--domain、--username。請用 --password 或 DIEGO_PASSWORD 提供密碼；未提供時會互動提示。keytab/TGT 快取認證尚未支援。預設 --mode audit 會隱藏可破解雜湊；只有在獲授權且確有需要時使用 --mode full --export-hashes。常用選項還包括 --baseline、--explain、--sarif-output、--webhook-output、--plan-validate、--plan-state、--mcp 和 --mcp-init。
 
 多網域計畫使用 `max_parallel` 限制並行數。加入 `--plan-state PATH` 可在批次之間保存並恢復本機狀態；計畫指紋或 SHA-256 不相符時會拒絕恢復。使用 `--plan PATH --plan-validate` 可在沒有憑證和網路連線時驗證 scope、並行上限和目標。
 

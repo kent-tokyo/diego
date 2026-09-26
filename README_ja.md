@@ -26,9 +26,10 @@ cargo build --release
   --username jdoe --modules all --format json --output report.json
 ~~~
 
-通常のスキャンでは --dc、--domain、--username が必須です。パスワードは --password、DIEGO_PASSWORD、
-keytab/TGT キャッシュ、対話プロンプトの順に取得します。既定の --mode audit ではクラック可能なハッシュを除外します。
-必要な認可済み作業に限り、--mode full --export-hashes を明示してください。
+通常のスキャンでは --dc、--domain、--username が必須です。パスワードは --password または
+DIEGO_PASSWORD で与え、未指定時は対話入力します。keytab/TGT キャッシュ認証は未対応です。既定の
+--mode audit ではクラック可能なハッシュを除外します。必要な認可済み作業に限り、--mode full
+--export-hashes を明示してください。
 
 主なオプションは --modules、--format、--output、--baseline、--timeout、--interface、--explain、--exposure-graph、
 --simulate-remediation、--plan、--plan-validate、--plan-state、--governance-*、--sarif-output、--webhook-output、

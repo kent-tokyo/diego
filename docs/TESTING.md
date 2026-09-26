@@ -28,9 +28,11 @@ pending a controlled lab environment (methodology only in
 cargo test --all                       # everything
 cargo test --test detection_tests      # one layer
 cargo clippy --all -- -D warnings      # lints (CI gate)
-cargo audit                            # advisories (CI gate)
 cargo run -- --plan docs/sample-scan-plan.json --plan-validate
 ```
+
+CI also runs RustSec audit. Run `cargo audit` locally when the tool is
+installed.
 
 ## Updating the golden snapshot
 

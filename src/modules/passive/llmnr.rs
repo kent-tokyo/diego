@@ -608,7 +608,7 @@ mod tests {
 
         let result = parse_dns_name(&data, 0);
         // Should return None or empty due to safety limit
-        assert!(result.is_none() || result.as_ref().map_or(true, |s| s.is_empty()));
+        assert!(result.is_none() || result.as_ref().is_none_or(|s| s.is_empty()));
     }
 
     #[test]

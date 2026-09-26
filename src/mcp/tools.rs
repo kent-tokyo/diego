@@ -6,7 +6,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use ldap3::LdapConnAsync;
 use serde_json::Value;
 
 use crate::config::Config;
@@ -20,115 +19,16 @@ use crate::modules::ldap::queries::{
 use crate::modules::passive::llmnr::{capture_llmnr, capture_nbtns};
 use crate::report::{Finding, Severity};
 
-// ─── Tool schema definitions ──────────────────────────────────────────────────
+use super::common::{AdRequest, domain_to_base_dn, get_str, get_timeout, has_protocol_transition};
+use super::schema::{make_tool as schema_make_tool, tool_list as schema_tool_list};
 
 /// Returns the static list of MCP tools this server exposes.
 pub fn tool_list() -> Vec<Value> {
-    let ad_args = serde_json::json!({
-        "type": "object",
-        "properties": {
-            "dc_ip":    {"type": "string", "description": "Domain Controller IP address"},
-            "domain":   {"type": "string", "description": "AD domain name (e.g. corp.local)"},
-            "username": {"type": "string", "description": "Domain username"},
-            "password": {"type": "string", "description": "Domain password"},
-            "timeout_secs": {"type": "integer", "default": 10}
-        },
-        "required": ["dc_ip", "domain", "username", "password"]
-    });
-
-    vec![
-        make_tool(
-            "enumerate_asrep_candidates",
-            "List domain accounts that have DONT_REQ_PREAUTH set (AS-REP Roasting targets). Returns account names and DNs.",
-            ad_args.clone(),
-        ),
-        make_tool(
-            "enumerate_spn_accounts",
-            "List service accounts with registered SPNs (Kerberoasting targets). Returns SAM account names, SPN list, and supported encryption types.",
-            ad_args.clone(),
-        ),
-        make_tool(
-            "check_unconstrained_delegation",
-            "Find computer accounts with Unconstrained Delegation enabled. This is a Critical finding — coercion attacks can lead to full domain compromise.",
-            ad_args.clone(),
-        ),
-        make_tool(
-            "check_password_policy",
-            "Read the Default Domain Password Policy (min length, lockout threshold, history, etc.).",
-            ad_args.clone(),
-        ),
-        make_tool(
-            "scan_description_leaks",
-            "Search user account description fields for potential hardcoded credentials or sensitive information.",
-            ad_args.clone(),
-        ),
-        make_tool(
-            "run_asrep_roasting",
-            "Perform AS-REP Roasting: send AS-REQ without pre-auth to a list of candidate usernames and return Hashcat-mode-18200 hashes for vulnerable accounts.",
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "dc_ip":    {"type": "string"},
-                    "domain":   {"type": "string"},
-                    "usernames": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "List of usernames to test (obtain from enumerate_asrep_candidates)"
-                    },
-                    "timeout_secs": {"type": "integer", "default": 10}
-                },
-                "required": ["dc_ip", "domain", "usernames"]
-            }),
-        ),
-        make_tool(
-            "run_kerberoasting",
-            "Perform Kerberoasting: authenticate with the provided credentials, then request TGS tickets for all SPN accounts and return Hashcat-mode-13100 hashes.",
-            ad_args.clone(),
-        ),
-        make_tool(
-            "listen_llmnr",
-            "Passively listen for LLMNR and NBT-NS broadcast queries on the local network. Returns observed queries with source IPs and queried hostnames.",
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "timeout_secs": {"type": "integer", "default": 30, "description": "How long to listen (seconds)"}
-                }
-            }),
-        ),
-        make_tool(
-            "enumerate_constrained_delegation",
-            "Find accounts and computers with Constrained Delegation configured (msDS-AllowedToDelegateTo or T2A4D flag). S4U2Proxy abuse can allow impersonating any user to listed services.",
-            ad_args.clone(),
-        ),
-        make_tool(
-            "enumerate_rbcd",
-            "Find objects with Resource-Based Constrained Delegation (msDS-AllowedToActOnBehalfOfOtherIdentity set). An attacker controlling a listed machine account can impersonate any user.",
-            ad_args.clone(),
-        ),
-        make_tool(
-            "enumerate_privileged_groups",
-            "List members of high-privilege AD groups: Domain Admins, Enterprise Admins, Backup Operators, Account Operators, etc. Uses recursive membership expansion.",
-            ad_args.clone(),
-        ),
-        make_tool(
-            "enumerate_stale_service_passwords",
-            "Find service accounts (with SPNs) whose passwords are older than 365 days. Old passwords on Kerberoastable accounts are significantly easier to crack.",
-            ad_args.clone(),
-        ),
-        make_tool(
-            "full_scan",
-            "Run all diagnostic modules (LDAP enumeration, AS-REP Roasting, Kerberoasting, LLMNR listen) and return all findings as structured JSON.",
-            ad_args,
-        ),
-    ]
+    schema_tool_list()
 }
 
 fn make_tool(name: &str, description: &str, schema: Value) -> Value {
-    serde_json::json!({
-        "name": name,
-        "description": description,
-        "inputSchema": schema
-    })
+    schema_make_tool(name, description, schema)
 }
 
 // ─── Tool dispatcher ──────────────────────────────────────────────────────────
@@ -153,61 +53,13 @@ pub async fn dispatch(name: &str, args: &Value) -> anyhow::Result<Value> {
     }
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-fn get_str<'a>(args: &'a Value, key: &str) -> anyhow::Result<&'a str> {
-    args.get(key)
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow::anyhow!("Missing argument: {}", key))
-}
-
-fn get_timeout(args: &Value) -> u64 {
-    args.get("timeout_secs").and_then(Value::as_u64).unwrap_or(10)
-}
-
-async fn ldap_connect(dc_ip: &str, domain: &str, username: &str, password: &str, timeout_secs: u64)
-    -> anyhow::Result<ldap3::Ldap>
-{
-    let url = format!("ldap://{}:389", dc_ip);
-    let (conn, mut ldap) = tokio::time::timeout(
-        Duration::from_secs(timeout_secs),
-        LdapConnAsync::new(&url),
-    )
-    .await
-    .map_err(|_| anyhow::anyhow!("LDAP connection timeout"))?
-    .map_err(|e| anyhow::anyhow!("LDAP connection failed: {}", e))?;
-
-    ldap3::drive!(conn);
-
-    ldap.simple_bind(&format!("{}@{}", username, domain), password)
-        .await?
-        .success()
-        .map_err(|e| anyhow::anyhow!("LDAP bind failed: {}", e))?;
-
-    Ok(ldap)
-}
-
-fn domain_to_base_dn(domain: &str) -> String {
-    domain.split('.').map(|p| format!("DC={}", p)).collect::<Vec<_>>().join(",")
-}
-
-const TRUSTED_TO_AUTH_FOR_DELEGATION: u32 = 0x1000000;
-
-fn has_protocol_transition(uac: u32) -> bool {
-    uac & TRUSTED_TO_AUTH_FOR_DELEGATION != 0
-}
-
 // ─── Tool implementations ─────────────────────────────────────────────────────
 
 async fn enumerate_asrep_candidates(args: &Value) -> anyhow::Result<Value> {
-    let dc_ip = get_str(args, "dc_ip")?;
-    let domain = get_str(args, "domain")?;
-    let username = get_str(args, "username")?;
-    let password = get_str(args, "password")?;
-    let timeout = get_timeout(args);
-    let base_dn = domain_to_base_dn(domain);
+    let request = AdRequest::from_args(args)?;
+    let base_dn = request.base_dn();
 
-    let mut ldap = ldap_connect(dc_ip, domain, username, password, timeout).await?;
+    let mut ldap = request.connect().await?;
     let objs = query_asrep_candidates(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
@@ -222,14 +74,10 @@ async fn enumerate_asrep_candidates(args: &Value) -> anyhow::Result<Value> {
 }
 
 async fn enumerate_spn_accounts(args: &Value) -> anyhow::Result<Value> {
-    let dc_ip = get_str(args, "dc_ip")?;
-    let domain = get_str(args, "domain")?;
-    let username = get_str(args, "username")?;
-    let password = get_str(args, "password")?;
-    let timeout = get_timeout(args);
-    let base_dn = domain_to_base_dn(domain);
+    let request = AdRequest::from_args(args)?;
+    let base_dn = request.base_dn();
 
-    let mut ldap = ldap_connect(dc_ip, domain, username, password, timeout).await?;
+    let mut ldap = request.connect().await?;
     let objs = query_spn_accounts(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
@@ -246,14 +94,10 @@ async fn enumerate_spn_accounts(args: &Value) -> anyhow::Result<Value> {
 }
 
 async fn check_unconstrained_delegation(args: &Value) -> anyhow::Result<Value> {
-    let dc_ip = get_str(args, "dc_ip")?;
-    let domain = get_str(args, "domain")?;
-    let username = get_str(args, "username")?;
-    let password = get_str(args, "password")?;
-    let timeout = get_timeout(args);
-    let base_dn = domain_to_base_dn(domain);
+    let request = AdRequest::from_args(args)?;
+    let base_dn = request.base_dn();
 
-    let mut ldap = ldap_connect(dc_ip, domain, username, password, timeout).await?;
+    let mut ldap = request.connect().await?;
     let objs = query_unconstrained_delegation(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
@@ -274,14 +118,10 @@ async fn check_unconstrained_delegation(args: &Value) -> anyhow::Result<Value> {
 }
 
 async fn check_password_policy(args: &Value) -> anyhow::Result<Value> {
-    let dc_ip = get_str(args, "dc_ip")?;
-    let domain = get_str(args, "domain")?;
-    let username = get_str(args, "username")?;
-    let password = get_str(args, "password")?;
-    let timeout = get_timeout(args);
-    let base_dn = domain_to_base_dn(domain);
+    let request = AdRequest::from_args(args)?;
+    let base_dn = request.base_dn();
 
-    let mut ldap = ldap_connect(dc_ip, domain, username, password, timeout).await?;
+    let mut ldap = request.connect().await?;
     let objs = query_password_policy(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
@@ -304,14 +144,10 @@ async fn check_password_policy(args: &Value) -> anyhow::Result<Value> {
 }
 
 async fn scan_description_leaks(args: &Value) -> anyhow::Result<Value> {
-    let dc_ip = get_str(args, "dc_ip")?;
-    let domain = get_str(args, "domain")?;
-    let username = get_str(args, "username")?;
-    let password = get_str(args, "password")?;
-    let timeout = get_timeout(args);
-    let base_dn = domain_to_base_dn(domain);
+    let request = AdRequest::from_args(args)?;
+    let base_dn = request.base_dn();
 
-    let mut ldap = ldap_connect(dc_ip, domain, username, password, timeout).await?;
+    let mut ldap = request.connect().await?;
     let objs = query_description_leaks(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
@@ -357,7 +193,7 @@ async fn run_asrep_roasting(args: &Value) -> anyhow::Result<Value> {
                     }));
                 }
             }
-            Err(e) => eprintln!("[mcp] AS-REP error for {}: {}", username, e),
+            Err(e) => eprintln!("[mcp] AS-REP request failed: {}", e),
         }
 
         // Jitter
@@ -374,14 +210,10 @@ async fn run_asrep_roasting(args: &Value) -> anyhow::Result<Value> {
 async fn run_kerberoasting(args: &Value) -> anyhow::Result<Value> {
     // For kerberoasting we need valid credentials and the SPN list from LDAP.
     // This tool combines enumerate_spn_accounts + the kerberoasting logic.
-    let dc_ip = get_str(args, "dc_ip")?;
-    let domain = get_str(args, "domain")?;
-    let username = get_str(args, "username")?;
-    let password = get_str(args, "password")?;
-    let timeout = get_timeout(args);
-    let base_dn = domain_to_base_dn(domain);
+    let request = AdRequest::from_args(args)?;
+    let base_dn = request.base_dn();
 
-    let mut ldap = ldap_connect(dc_ip, domain, username, password, timeout).await?;
+    let mut ldap = request.connect().await?;
     let spn_objs = query_spn_accounts(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
@@ -390,7 +222,13 @@ async fn run_kerberoasting(args: &Value) -> anyhow::Result<Value> {
         return Ok(serde_json::json!({ "hashes": [], "count": 0, "message": "No SPN accounts found" }));
     }
 
-    let config = build_minimal_config(dc_ip, domain, username, password, timeout)?;
+    let config = build_minimal_config(
+        &request.dc_ip,
+        &request.domain,
+        &request.username,
+        &request.password,
+        request.timeout_secs,
+    )?;
     let ctx = crate::modules::LdapContext {
         asrep_candidates: vec![],
         spn_accounts,
@@ -440,14 +278,10 @@ async fn listen_llmnr(args: &Value) -> anyhow::Result<Value> {
 }
 
 async fn mcp_constrained_delegation(args: &Value) -> anyhow::Result<Value> {
-    let dc_ip = get_str(args, "dc_ip")?;
-    let domain = get_str(args, "domain")?;
-    let username = get_str(args, "username")?;
-    let password = get_str(args, "password")?;
-    let timeout = get_timeout(args);
-    let base_dn = domain_to_base_dn(domain);
+    let request = AdRequest::from_args(args)?;
+    let base_dn = request.base_dn();
 
-    let mut ldap = ldap_connect(dc_ip, domain, username, password, timeout).await?;
+    let mut ldap = request.connect().await?;
     let objs = crate::modules::ldap::queries::query_constrained_delegation(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
@@ -471,14 +305,10 @@ async fn mcp_constrained_delegation(args: &Value) -> anyhow::Result<Value> {
 }
 
 async fn mcp_rbcd(args: &Value) -> anyhow::Result<Value> {
-    let dc_ip = get_str(args, "dc_ip")?;
-    let domain = get_str(args, "domain")?;
-    let username = get_str(args, "username")?;
-    let password = get_str(args, "password")?;
-    let timeout = get_timeout(args);
-    let base_dn = domain_to_base_dn(domain);
+    let request = AdRequest::from_args(args)?;
+    let base_dn = request.base_dn();
 
-    let mut ldap = ldap_connect(dc_ip, domain, username, password, timeout).await?;
+    let mut ldap = request.connect().await?;
     let objs = crate::modules::ldap::queries::query_rbcd(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
@@ -495,14 +325,10 @@ async fn mcp_rbcd(args: &Value) -> anyhow::Result<Value> {
 }
 
 async fn mcp_privileged_groups(args: &Value) -> anyhow::Result<Value> {
-    let dc_ip = get_str(args, "dc_ip")?;
-    let domain = get_str(args, "domain")?;
-    let username = get_str(args, "username")?;
-    let password = get_str(args, "password")?;
-    let timeout = get_timeout(args);
-    let base_dn = domain_to_base_dn(domain);
+    let request = AdRequest::from_args(args)?;
+    let base_dn = request.base_dn();
 
-    let mut ldap = ldap_connect(dc_ip, domain, username, password, timeout).await?;
+    let mut ldap = request.connect().await?;
     let groups = crate::modules::ldap::queries::query_privileged_groups(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
@@ -519,14 +345,10 @@ async fn mcp_privileged_groups(args: &Value) -> anyhow::Result<Value> {
 }
 
 async fn mcp_stale_passwords(args: &Value) -> anyhow::Result<Value> {
-    let dc_ip = get_str(args, "dc_ip")?;
-    let domain = get_str(args, "domain")?;
-    let username = get_str(args, "username")?;
-    let password = get_str(args, "password")?;
-    let timeout = get_timeout(args);
-    let base_dn = domain_to_base_dn(domain);
+    let request = AdRequest::from_args(args)?;
+    let base_dn = request.base_dn();
 
-    let mut ldap = ldap_connect(dc_ip, domain, username, password, timeout).await?;
+    let mut ldap = request.connect().await?;
     let objs = crate::modules::ldap::queries::query_stale_service_passwords(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
@@ -550,13 +372,15 @@ async fn mcp_stale_passwords(args: &Value) -> anyhow::Result<Value> {
 }
 
 async fn full_scan(args: &Value) -> anyhow::Result<Value> {
-    let dc_ip = get_str(args, "dc_ip")?;
-    let domain = get_str(args, "domain")?;
-    let username = get_str(args, "username")?;
-    let password = get_str(args, "password")?;
-    let timeout = get_timeout(args);
+    let request = AdRequest::from_args(args)?;
 
-    let config = Arc::new(build_minimal_config(dc_ip, domain, username, password, timeout)?);
+    let config = Arc::new(build_minimal_config(
+        &request.dc_ip,
+        &request.domain,
+        &request.username,
+        &request.password,
+        request.timeout_secs,
+    )?);
 
     use crate::modules::DiagnosticModule;
     let ldap_mod = crate::modules::ldap::LdapModule::new();
@@ -645,6 +469,10 @@ fn build_minimal_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_password() -> String {
+        hex::encode(rand::random::<[u8; 16]>())
+    }
 
     // ─── Phase 1: Tool List & Metadata Tests ───────────────────────────
 
@@ -769,6 +597,36 @@ mod tests {
 
         let timeout = get_timeout(&args);
         assert_eq!(timeout, 0);
+    }
+
+    #[test]
+    fn test_ad_request_collects_connection_context() {
+        let password = test_password();
+        let args = serde_json::json!({
+            "dc_ip": "192.0.2.10",
+            "domain": "corp.local",
+            "username": "analyst",
+            "password": password,
+            "timeout_secs": 25
+        });
+
+        let request = AdRequest::from_args(&args).expect("complete AD arguments should parse");
+        assert_eq!(request.dc_ip, "192.0.2.10");
+        assert_eq!(request.domain, "corp.local");
+        assert_eq!(request.username, "analyst");
+        assert_eq!(request.timeout_secs, 25);
+        assert_eq!(request.base_dn(), "DC=corp,DC=local");
+    }
+
+    #[test]
+    fn test_ad_request_requires_credentials() {
+        let args = serde_json::json!({
+            "dc_ip": "192.0.2.10",
+            "domain": "corp.local",
+            "username": "analyst"
+        });
+
+        assert!(AdRequest::from_args(&args).is_err());
     }
 
     // ─── Phase 3: Domain to DN Conversion Tests ────────────────────────

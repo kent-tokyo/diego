@@ -42,7 +42,7 @@ fn test_ldap_dn_format_validation() {
 #[test]
 fn test_privileged_group_names() {
     // Verify well-known privileged groups
-    let groups = vec![
+    let groups = [
         "Domain Admins",
         "Enterprise Admins",
         "Schema Admins",

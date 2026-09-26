@@ -14,7 +14,7 @@ cargo build --release
   --username jdoe --modules all --format json --output report.json
 ~~~
 
-普通扫描需要 --dc、--domain、--username。密码按 --password、DIEGO_PASSWORD、keytab/TGT 缓存、交互提示的顺序获取。默认 --mode audit 会隐藏可破解哈希；仅在获授权且确有需要时使用 --mode full --export-hashes。常用选项还包括 --baseline、--explain、--sarif-output、--webhook-output、--plan-validate、--plan-state、--mcp 和 --mcp-init。
+普通扫描需要 --dc、--domain、--username。请用 --password 或 DIEGO_PASSWORD 提供密码；未提供时会交互提示。keytab/TGT 缓存认证尚未支持。默认 --mode audit 会隐藏可破解哈希；仅在获授权且确有需要时使用 --mode full --export-hashes。常用选项还包括 --baseline、--explain、--sarif-output、--webhook-output、--plan-validate、--plan-state、--mcp 和 --mcp-init。
 
 多域计划使用 `max_parallel` 限制并发。加入 `--plan-state PATH` 可在批次之间保存并恢复本地状态；计划指纹或 SHA-256 不匹配时会拒绝恢复。使用 `--plan PATH --plan-validate` 可在没有凭据和网络连接时验证 scope、并发上限和目标。
 

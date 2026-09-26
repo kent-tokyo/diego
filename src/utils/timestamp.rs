@@ -115,7 +115,7 @@ mod tests {
         // Create a FILETIME for 365 days ago
         let filetime = days_ago_to_windows_filetime(365).unwrap();
         let age = filetime_age_days(&filetime.to_string()).unwrap();
-        assert!(age >= 364 && age <= 366, "365-day-old timestamp should report ~365 days");
+        assert!((364..=366).contains(&age), "365-day-old timestamp should report ~365 days");
     }
 
     #[test]

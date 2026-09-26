@@ -5,9 +5,8 @@ Directory diagnostic tool; contributions should preserve that posture.
 
 ## Ground rules
 
-- **OPSEC constraint (enforced by CI):** no `std::process::Command` anywhere in
-  `src/`. All behaviour is pure network protocol interaction. The `opsec-lint`
-  CI job fails the build if this is violated.
+- **No OS commands:** `std::process::Command` is forbidden in `src/`; CI checks
+  this directly. Network diagnostics and passive capture are allowed.
 - **Read-only:** no writes to the directory; no exploitation/persistence. See
   [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) for goals and non-goals.
 - **Authorisation:** only test against directories you own or are explicitly
@@ -19,11 +18,10 @@ Directory diagnostic tool; contributions should preserve that posture.
 cargo build
 cargo test --all
 cargo clippy --all -- -D warnings   # CI gate: warnings are errors
-cargo audit                         # optional locally; runs in CI
 ```
 
-CI must be green on all platforms (Linux musl, Windows, plus test/clippy/audit/
-coverage) before a PR is merged.
+CI runs tests, Clippy, the OS-command check, RustSec audit, Linux musl, Windows,
+and best-effort coverage. Run `cargo audit` locally only when it is installed.
 
 The test suite is layered (golden / detection / integration / schema / unit) —
 see [docs/TESTING.md](docs/TESTING.md) for what each layer guards and what is not
@@ -31,16 +29,11 @@ yet covered.
 
 ## Adding a detector / finding
 
-1. Add the LDAP query (or Kerberos/passive logic) — e.g. a `query_*` function in
-   `src/modules/ldap/queries.rs` (fetch only).
-2. Turn results into `Finding`s in the module's `run` (e.g.
-   `src/modules/ldap/mod.rs`), using `Finding::new(...)` with a **stable id**
-   derived from an object identifier (sAMAccountName, CN, SPN) — not a loop
-   index — so baseline diffs stay stable.
-3. Set severity, and use `.with_confidence(...)` for heuristic detections
-   (default is `High`; use `Medium`/`Low` for keyword/inference-based findings).
-   Add `.with_mitre(...)` and `.with_remediation(...)` where applicable.
-4. If you change the report's JSON shape, update `docs/report.schema.json`.
+1. Add a read-only LDAP, Kerberos, or passive query and turn results into
+   `Finding`s with a stable object-derived ID.
+2. Set severity, confidence, MITRE mapping, and remediation where appropriate.
+3. Update `docs/report.schema.json` and the golden fixture when the JSON
+   contract changes.
 
 ## Updating the golden test
 

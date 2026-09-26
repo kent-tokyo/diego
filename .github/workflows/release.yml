@@ -75,14 +75,10 @@ jobs:
             See the [CHANGELOG](https://github.com/kent-tokyo/diego/blob/main/CHANGELOG.md) for the full, categorised list (Added / Changed / Fixed / Security).
 
             ## Migration
-            - Safe output is now the default. Roastable findings remain visible,
-              but crackable hash material requires `--mode full --export-hashes`.
-            - New flags: `--format html`, `--baseline <prior.json>`, `--mode`,
-              and `--export-hashes`.
-            - Reports now include a `confidence` field; baseline JSON from older
-              builds still loads (confidence defaults to HIGH).
-            - Use `--explain <finding-id>` to inspect detector provenance,
-              evidence, confidence rationale, and remediation.
+            - Safe output is the default. Crackable hash material requires both
+              `--mode full` and `--export-hashes`.
+            - Check the version's CHANGELOG section before updating report
+              consumers or automation.
 
             ## Known limitations
             - **Detection:** diego avoids host-based EDR runtimes, but DC-side

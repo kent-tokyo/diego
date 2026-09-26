@@ -32,10 +32,11 @@ cargo build --release
   --username jdoe --modules all --format json --output report.json
 ```
 
-The password may be supplied with `--password`, `DIEGO_PASSWORD`, an available
-credential cache, or the interactive prompt. The default `audit` mode removes
-crackable hash material from reports. Only an authorised assessment that needs
-that material should use both `--mode full --export-hashes`.
+Supply a password with `--password` or `DIEGO_PASSWORD`; otherwise diego prompts
+for one. Keytab and Kerberos-cache authentication are not supported yet. The
+default `audit` mode removes crackable hash material from reports. Only an
+authorised assessment that needs that material should use both `--mode full`
+and `--export-hashes`.
 
 ## Common options
 
@@ -51,17 +52,17 @@ that material should use both `--mode full --export-hashes`.
 | `--sarif-output <PATH>` | Write a SARIF 2.1.0 sidecar |
 | `--webhook-output <PATH>` | Write an evidence-safe webhook sidecar |
 | `--attack-path` / `--attack-path-output <PATH>` | Emit a bounded defensive path summary |
-| `--plan <PATH>` | Execute a credential-free multi-domain plan |
+| `--plan <PATH>` | Execute a multi-domain plan whose target metadata has no credentials |
 | `--plan-validate` | Validate a plan without credentials or network access |
 | `--plan-state <PATH>` | Save and resume an integrity-protected local checkpoint |
 | `--mcp` / `--mcp-init` | Run MCP stdio mode or print its client configuration |
 
 ## Multi-domain plans
 
-A plan contains target metadata only; credentials remain CLI or environment
-inputs. Targets execute in bounded batches controlled by `max_parallel`, and
-the FleetReport retains each target's status, report, bounded `attackPath`, and
-aggregate severity counts.
+A plan contains target metadata only. Executing it still requires `--username`
+and either `--password` or `DIEGO_PASSWORD`. Targets execute in bounded batches
+controlled by `max_parallel`; FleetReport retains each target's status, report,
+bounded `attackPath`, and aggregate severity counts.
 
 Validate a plan before supplying credentials:
 
@@ -95,11 +96,11 @@ remove the behavioural signature of a request.
 ```bash
 cargo test --all
 cargo clippy --all -- -D warnings
-cargo package --allow-dirty --no-verify --offline
+cargo package --allow-dirty --no-verify
 ```
 
-The project forbids `std::process::Command` in `src/` and does not require a
-registry connection for the local test and package workflow. See
+The project forbids `std::process::Command` in `src/`. Offline commands work
+only when their dependencies are already cached. See
 [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/TESTING.md](docs/TESTING.md).
 
 ## Documentation
