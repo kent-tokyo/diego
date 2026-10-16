@@ -7,8 +7,9 @@ Directory diagnostic tool; contributions should preserve that posture.
 
 - **No OS commands:** `std::process::Command` is forbidden in `src/`; CI checks
   this directly. Network diagnostics and passive capture are allowed.
-- **Read-only:** no writes to the directory; no exploitation/persistence. See
-  [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) for goals and non-goals.
+- **Read-only:** no directory writes, exploitation, persistence, crawling, or
+  target discovery. New network checks must use explicit targets and bounded
+  requests. See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) for the boundary.
 - **Authorisation:** only test against directories you own or are explicitly
   authorised to assess.
 
@@ -29,8 +30,9 @@ yet covered.
 
 ## Adding a detector / finding
 
-1. Add a read-only LDAP, Kerberos, or passive query and turn results into
-   `Finding`s with a stable object-derived ID.
+1. Add a read-only, bounded query or local observation and turn results into
+   `Finding`s with a stable, input-derived ID. Network modules must state their
+   target, request bound, and inconclusive behaviour.
 2. Set severity, confidence, MITRE mapping, and remediation where appropriate.
 3. Update `docs/report.schema.json` and the golden fixture when the JSON
    contract changes.

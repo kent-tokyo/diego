@@ -1,26 +1,27 @@
 # Testing layers
 
-diego's tests are organised into layers, each guarding a different property.
-Knowing which layer a test belongs to tells you what a failure means — and what
-is **not** yet covered.
+Each layer guards a different property. A passing layer does not prove the
+behaviour named in its final column.
 
 | Layer | File(s) | Guards | Does **not** guard |
 |-------|---------|--------|--------------------|
 | **Golden** | `tests/golden_test.rs` + `tests/golden/sample-report.json` | The serialized report's *shape* — finding count, fields, severity/confidence, ordering — does not drift unexpectedly (timestamps normalised). | Whether findings are *correct* for real input. |
 | **Detection** | `tests/detection_tests.rs` | Detection *logic*: a synthetic `LdapObject` produces the expected finding (id, severity, confidence), and benign input does **not** (false-positive guard). | A live Domain Controller; the LDAP fetch/filter layer. |
 | **Integration** | `tests/ldap_integration_tests.rs`, `tests/mock_kdc.rs` | LDAP filter strings / OID constants; Kerberos KDC response parsing (AS-REP flow, malformed input). | The end-to-end fetch→analyze path against a directory. |
+| **Web-header unit** | `src/modules/web/analyze.rs` | Explicit HTTP/HTTPS target validation plus deterministic status, HSTS, framing-policy, security-header, redirect, and cookie-attribute classification. | A live server's configuration, redirect destination, page body, or application behaviour. |
+| **WordPress unit** | `src/modules/wordpress/analyze.rs` | Bounded public WordPress exposure classification and exact site-root validation. | Plugin/user enumeration, authentication, CVE applicability, or exploitability. |
+| **Local UI unit** | `src/web_ui.rs` | Local-only Web/WordPress UI copy, language-selector coverage, and JSON error response shape. | Browser rendering, a live local listener, or a real external site. |
 | **Schema** | `tests/schema_test.rs` + `docs/report.schema.json` | The JSON report conforms to the published schema (the integration contract). | Semantic correctness of values. |
 | **Unit** | `#[cfg(test)]` in `src/**` (e.g. `parser.rs`, `severity.rs`) | Small pure helpers (attribute parsing, severity mapping). | Cross-module behaviour. |
 
 ## What is not yet covered
 
-There is **no live-DC end-to-end test** — diego is not run against a real or
-mocked directory in CI. The detection layer exercises analysis logic over
-representative objects, and the integration layer covers filters and KDC
-parsing. Plan validation, bounded execution, checkpoint identity, and
-checkpoint tamper rejection are covered locally. Performance benchmarks remain
-pending a controlled lab environment (methodology only in
-[BENCHMARKS.md](BENCHMARKS.md)).
+There is **no live-DC or live-external-target end-to-end test** in CI. The
+detection layer uses representative objects; integration tests cover LDAP
+filters and KDC parsing; Web/WordPress/UI tests cover only bounded parsing and
+local response contracts. Plan validation, bounded execution, and checkpoint
+tamper rejection run locally. Benchmarks remain methodology only in
+[BENCHMARKS.md](BENCHMARKS.md).
 
 ## Running
 

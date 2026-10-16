@@ -4,6 +4,8 @@ pub mod kerberos;
 pub mod ldap;
 pub mod passive;
 pub mod tls;
+pub mod web;
+pub mod wordpress;
 
 use async_trait::async_trait;
 use std::sync::Arc;

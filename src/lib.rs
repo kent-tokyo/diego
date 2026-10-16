@@ -6,22 +6,25 @@ pub mod ai;
 pub mod cli;
 pub mod config;
 pub mod error;
-pub mod modules;
 pub mod mcp;
+pub mod modules;
 pub mod report;
 pub mod utils;
+pub mod web_ui;
 
 use config::{Config, ModuleKind, RunMode};
 use modules::{
+    DiagnosticModule, LdapContext,
     email::EmailModule,
     fs::FsModule,
     kerberos::KerberosModule,
-    ldap::{run_ldap_and_extract_context, LdapModule},
+    ldap::{LdapModule, run_ldap_and_extract_context},
     passive::PassiveModule,
     tls::TlsModule,
-    DiagnosticModule, LdapContext,
+    web::WebModule,
+    wordpress::WordPressModule,
 };
-use report::{make_scan_context, Report};
+use report::{Report, make_scan_context};
 
 /// Run the configured diagnostics and return a report.
 ///
@@ -34,7 +37,8 @@ pub async fn run_scan(config: Arc<Config>) -> anyhow::Result<Report> {
     let mut modules_run = Vec::new();
 
     let ldap_ctx: LdapContext;
-    if config.modules.contains(&ModuleKind::Ldap) || config.modules.contains(&ModuleKind::Kerberos) {
+    if config.modules.contains(&ModuleKind::Ldap) || config.modules.contains(&ModuleKind::Kerberos)
+    {
         modules_run.push("ldap".to_string());
         match run_ldap_and_extract_context(Arc::clone(&config)).await {
             Ok((_unused, ctx)) => {
@@ -48,11 +52,17 @@ pub async fn run_scan(config: Arc<Config>) -> anyhow::Result<Report> {
             }
             Err(error) => {
                 eprintln!("[!] LDAP context extraction failed: {}", error);
-                ldap_ctx = LdapContext { asrep_candidates: vec![], spn_accounts: vec![] };
+                ldap_ctx = LdapContext {
+                    asrep_candidates: vec![],
+                    spn_accounts: vec![],
+                };
             }
         }
     } else {
-        ldap_ctx = LdapContext { asrep_candidates: vec![], spn_accounts: vec![] };
+        ldap_ctx = LdapContext {
+            asrep_candidates: vec![],
+            spn_accounts: vec![],
+        };
     }
 
     let run_kerberos = config.modules.contains(&ModuleKind::Kerberos);
@@ -66,8 +76,12 @@ pub async fn run_scan(config: Arc<Config>) -> anyhow::Result<Report> {
                 kerberos_module.run(Arc::clone(&config)),
                 passive_module.run(Arc::clone(&config)),
             );
-            if let Ok(findings) = kerberos { all_findings.extend(findings); }
-            if let Ok(findings) = passive { all_findings.extend(findings); }
+            if let Ok(findings) = kerberos {
+                all_findings.extend(findings);
+            }
+            if let Ok(findings) = passive {
+                all_findings.extend(findings);
+            }
         }
         (true, false) => {
             modules_run.push("kerberos".to_string());
@@ -105,6 +119,22 @@ pub async fn run_scan(config: Arc<Config>) -> anyhow::Result<Report> {
         match FsModule::new().run(Arc::clone(&config)).await {
             Ok(findings) => all_findings.extend(findings),
             Err(error) => eprintln!("[!] fs module error: {}", error),
+        }
+    }
+
+    if config.modules.contains(&ModuleKind::Web) {
+        modules_run.push("web".to_string());
+        match WebModule::new().run(Arc::clone(&config)).await {
+            Ok(findings) => all_findings.extend(findings),
+            Err(error) => eprintln!("[!] web module error: {}", error),
+        }
+    }
+
+    if config.modules.contains(&ModuleKind::WordPress) {
+        modules_run.push("wordpress".to_string());
+        match WordPressModule::new().run(Arc::clone(&config)).await {
+            Ok(findings) => all_findings.extend(findings),
+            Err(error) => eprintln!("[!] wordpress module error: {}", error),
         }
     }
 

@@ -1,39 +1,32 @@
 # diego
 
-Read-only Active Directory diagnostics for authorised defenders and assessors.
-diego runs from a standard domain-user context and produces JSON, Markdown, or
-self-contained HTML reports. It does not modify the directory, execute OS
+Read-only security diagnostics for authorised defenders and assessors. diego
+uses standard-user access where applicable and writes JSON, Markdown, or
+self-contained HTML reports. It does not modify a directory, execute OS
 commands, crack hashes, exploit hosts, or move laterally.
 
 ## Current release
 
-**v0.23.0** adds credential-free, read-only posture diagnostics for email
-authentication, explicitly named TLS endpoints, and operator-named local paths.
-These surfaces run without a Domain Controller and do not execute commands,
-read file contents, scan ports, or attempt authentication.
+**v0.24.0** is the published release. It includes Active Directory diagnostics,
+credential-free email/TLS/file-permission checks, bounded Web and WordPress
+posture checks, and a loopback-only Web UI.
 
-## Capabilities
+## What it checks
 
-- LDAP: delegation, RBCD, privileged groups, SPNs, stale service passwords,
-  description leaks, password policy, and related read-only findings.
-- Kerberos: AS-REP and TGS requests with audit-safe evidence handling.
-- Passive observation: LLMNR/NBT-NS and cleartext-protocol indicators on a
-  selected local interface.
-- Email & domain authentication hygiene (Surface A): SPF, DMARC, DKIM (common
-  selectors), MTA-STS, TLS-RPT, CAA, and a bounded DNSSEC check — over public
-  DNS only, needing no credentials and no Domain Controller.
-- TLS transport hygiene (Surface B): for explicitly named endpoints, which of
-  TLS 1.0/1.1/1.2/1.3 are accepted, the negotiated cipher, and certificate
-  validity (expired/expiring/self-signed). Read-only, no port scanning, no
-  exploit probes, no credentials.
-- Local file-permission posture (Surface C): for paths you name, over-permissive
-  private keys and credential files, world-writable files/directories, and loose
-  .ssh/.gnupg permissions — inspecting permission bits only (never file
-  contents), never following symlinks, unprivileged and read-only (Unix).
-- Reports and integrations: JSON, Markdown, HTML, baseline diff, explanations,
-  bounded exposure graph, remediation simulation, governance, SARIF, webhook,
-  MCP stdio, and multi-domain plans.
-- Optional Claude analysis and chat, requiring `ANTHROPIC_API_KEY`.
+| Surface | Scope |
+|---|---|
+| Active Directory | Read-only LDAP and Kerberos diagnostics with standard domain-user credentials; optional passive local-interface observation. |
+| Email DNS | SPF, DMARC, common DKIM selectors, MTA-STS, TLS-RPT, CAA, and bounded DNSSEC checks over public DNS. |
+| TLS | Accepted TLS versions, negotiated cipher, and basic certificate validity for endpoints named with `--tls-target`. |
+| File permissions | Unix permission bits for named files and directories; contents and symlinks are not read. |
+| Web headers | HTTPS redirect, response security headers, framing policy, and cookie attributes for exact URLs named with `--web-target`. |
+| WordPress | Bounded public posture for exact site roots: generator exposure, X-Pingback, XML-RPC, REST index, and `readme.html`. |
+
+External Web checks are deliberately narrow: one unauthenticated request per
+URL, plus a range-limited GET only when HEAD is unsupported. They do not follow
+redirects, crawl, discover paths, authenticate, submit forms, enumerate users
+or plugins, verify CVEs, or send attack payloads. HTTPS error responses are
+inconclusive, not missing-header findings.
 
 ## Quick start
 
@@ -49,109 +42,73 @@ default `audit` mode removes crackable hash material from reports. Only an
 authorised assessment that needs that material should use both `--mode full`
 and `--export-hashes`.
 
-The email module is read-only and needs neither credentials nor a Domain
-Controller — only a domain and a resolver:
+Released, credential-free checks need only their explicit inputs:
 
 ```bash
-./target/release/diego --modules email --domain example.com \
-  --dns-resolver 1.1.1.1 --format json --output email.json
-```
-
-The TLS module is read-only and probes only the endpoints you name (no port
-scanning); it needs no credentials and no Domain Controller:
-
-```bash
-./target/release/diego --modules tls --domain n/a \
+# Public email DNS
+./target/release/diego --modules email --domain example.com --format json
+# Named TLS endpoints; no port discovery
+./target/release/diego --modules tls \
   --tls-target www.example.com:443,mail.example.com:443 --format json
-```
-
-The file-permission module scans only the paths you name, reads permission
-bits (not contents), and needs no credentials:
-
-```bash
-./target/release/diego --modules fs --domain n/a \
+# Named local paths; permission bits only
+./target/release/diego --modules fs \
   --fs-path ~/.ssh,~/.aws --format json
 ```
+
+Web and WordPress checks require an exact, authorised target:
+
+```bash
+./target/release/diego --modules web \
+  --web-target https://www.example.com/security --format json
+
+./target/release/diego --modules wordpress \
+  --wordpress-target https://www.example.com/ --format json
+```
+
+`--web-ui` starts the same two checks through a browser form on
+`127.0.0.1:8787`. It accepts one target at a time, requires an authorisation
+acknowledgement, stores no results, and never binds to a remote interface.
+The interface switches between English, Japanese, Simplified Chinese, and
+Traditional Chinese; raw diagnostic evidence is preserved in the report.
 
 ## Common options
 
 | Option | Purpose |
 |---|---|
-| `--modules <LIST>` | Run `kerberos`, `ldap`, `passive`, `email`, `tls`, `fs`, or `all` |
-| `--dns-resolver <ADDR>` | Resolver for `email` checks (ip or ip:port; default: system) |
-| `--dkim-selectors <LIST>` | Comma-separated DKIM selectors for `email` (default: common set) |
-| `--tls-target <LIST>` | Comma-separated `host[:port]` endpoints for the `tls` module |
-| `--fs-path <LIST>` | Comma-separated files/dirs for the `fs` permission-posture module |
-| `--format <FORMAT>` | Write `json`, `markdown`, or `html` |
-| `--output <PATH>` | Write the primary report to a file |
-| `--baseline <PATH>` | Compare the current report with a prior report |
-| `--explain <ID>` | Explain a finding and its provenance |
-| `--exposure-graph` | Emit a bounded exposure graph |
-| `--simulate-remediation <IDS>` | Simulate removing findings locally |
-| `--sarif-output <PATH>` | Write a SARIF 2.1.0 sidecar |
-| `--webhook-output <PATH>` | Write an evidence-safe webhook sidecar |
-| `--attack-path` / `--attack-path-output <PATH>` | Emit a bounded defensive path summary |
-| `--plan <PATH>` | Execute a multi-domain plan whose target metadata has no credentials |
-| `--plan-validate` | Validate a plan without credentials or network access |
-| `--plan-state <PATH>` | Save and resume an integrity-protected local checkpoint |
-| `--mcp` / `--mcp-init` | Run MCP stdio mode or print its client configuration |
-
-## Multi-domain plans
-
-A plan contains target metadata only. Executing it still requires `--username`
-and either `--password` or `DIEGO_PASSWORD`. Targets execute in bounded batches
-controlled by `max_parallel`; FleetReport retains each target's status, report,
-bounded `attackPath`, and aggregate severity counts.
-
-Validate a plan before supplying credentials:
-
-```bash
-diego --plan docs/sample-scan-plan.json --plan-validate
-```
-
-For a resumable run, write a local checkpoint after each batch:
-
-```bash
-diego --plan docs/sample-scan-plan.json --plan-state fleet-state.json \
-  --username jdoe --password "$DIEGO_PASSWORD" --modules ldap --output fleet.json
-```
-
-Re-running the same command skips completed targets and retries failed or
-unfinished targets. The checkpoint is rejected when its SHA-256 checksum or
-plan fingerprint is invalid, or when the plan's scope, target ID, domain, or DC
-metadata has changed.
+| `--modules <LIST>` | Run `kerberos`, `ldap`, `passive`, `email`, `tls`, `fs`, `web`, `wordpress`, or `all` |
+| `--dns-resolver <ADDR>` / `--dkim-selectors <LIST>` | Email DNS resolver and selector controls |
+| `--tls-target <LIST>` / `--fs-path <LIST>` | Explicit TLS endpoints or local paths |
+| `--web-target <LIST>` / `--wordpress-target <LIST>` | Explicit Web URLs or WordPress roots |
+| `--web-ui` / `--web-ui-port <PORT>` | Local-only Web/WordPress UI (default 8787) |
+| `--format <FORMAT>` / `--output <PATH>` | Primary `json`, `markdown`, or `html` output |
+| `--baseline <PATH>` / `--explain <ID>` | Baseline comparison and finding provenance |
+| `--plan <PATH>` / `--plan-validate` / `--plan-state <PATH>` | Bounded multi-domain execution, offline validation, and integrity-protected checkpoints |
+| `--sarif-output <PATH>` / `--webhook-output <PATH>` | Evidence-safe integration sidecars |
+| `--mcp` / `--mcp-init` | MCP stdio mode or client configuration |
 
 ## Output safety and detection
 
 Audit output is the default. Raw hash material is an explicit full-mode opt-in,
-and sidecars are designed to contain summaries rather than raw evidence.
-diego is read-only and does not claim to be invisible: LDAP enumeration,
-AS-REP roasting, and especially RC4 Kerberoasting remain observable to
-directory-side monitoring. Jitter may smooth request timing, but it does not
-remove the behavioural signature of a request.
+and sidecars contain summaries rather than raw evidence. diego is read-only,
+not invisible: directory-side monitoring can observe LDAP and Kerberos
+activity. Jitter changes timing; it does not hide the request pattern.
 
 ## Development
 
 ```bash
 cargo test --all
 cargo clippy --all -- -D warnings
-cargo package --allow-dirty --no-verify
 ```
-
-The project forbids `std::process::Command` in `src/`. Offline commands work
-only when their dependencies are already cached. See
-[CONTRIBUTING.md](CONTRIBUTING.md) and [docs/TESTING.md](docs/TESTING.md).
 
 ## Documentation
 
-- [Threat model](docs/THREAT_MODEL.md) — goals, non-goals, detection, and limits
-- [Roadmap](ROADMAP.md) — current status and next gates
-- [Security policy](SECURITY.md) — private vulnerability reporting
-- [Testing](docs/TESTING.md) — test layers and coverage boundaries
-- [Benchmarks](docs/BENCHMARKS.md) — reproducible lab methodology
-- [Report schema](docs/report.schema.json) — JSON contract
+- [Roadmap](ROADMAP.md) — release status and next gates
+- [Threat model](docs/THREAT_MODEL.md) — supported scope and non-goals
+- [Testing](docs/TESTING.md) — coverage boundaries
+- [Benchmarks](docs/BENCHMARKS.md) — lab methodology; no measured results yet
+- [Contributing](CONTRIBUTING.md) and [security policy](SECURITY.md)
+- [Report schema](docs/report.schema.json), [sample report](docs/sample-report.html), and [sample JSON](docs/sample-findings.json)
 - [Changelog](CHANGELOG.md)
-- [Sample report](docs/sample-report.html) and [sample JSON](docs/sample-findings.json)
 
 ## License
 

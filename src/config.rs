@@ -28,7 +28,7 @@ pub struct Cli {
     #[arg(long)]
     pub password: Option<String>,
 
-    /// Modules to run: kerberos, ldap, passive, all
+    /// Modules to run: kerberos, ldap, passive, email, tls, fs, web, wordpress, all
     #[arg(long, default_value = "all")]
     pub modules: String,
 
@@ -67,6 +67,22 @@ pub struct Cli {
     /// Local paths for file-permission posture checks (comma-separated files/dirs)
     #[arg(long)]
     pub fs_path: Option<String>,
+
+    /// Explicit website URLs for read-only HTTP security-header checks (comma-separated)
+    #[arg(long)]
+    pub web_target: Option<String>,
+
+    /// Explicit WordPress site roots for read-only posture checks (comma-separated)
+    #[arg(long)]
+    pub wordpress_target: Option<String>,
+
+    /// Start a localhost-only browser UI for authorised WordPress posture checks
+    #[arg(long)]
+    pub web_ui: bool,
+
+    /// TCP port for --web-ui (localhost only)
+    #[arg(long, default_value_t = 8787)]
+    pub web_ui_port: u16,
 
     // ── AI flags ─────────────────────────────────────────────────────────────
     /// Analyze scan results with Claude API after scanning
@@ -162,6 +178,8 @@ pub enum ModuleKind {
     Email,
     Tls,
     Fs,
+    Web,
+    WordPress,
 }
 
 #[derive(Clone, Debug)]
@@ -188,6 +206,8 @@ pub struct Config {
     pub dkim_selectors: Vec<String>,
     pub tls_targets: Vec<String>,
     pub fs_paths: Vec<String>,
+    pub web_targets: Vec<String>,
+    pub wordpress_targets: Vec<String>,
     // AI
     pub ai_analyze: bool,
     pub chat: bool,
@@ -212,19 +232,41 @@ impl Config {
     pub fn from_cli(cli: Cli) -> anyhow::Result<Self> {
         let modules = parse_modules(&cli.modules);
         let ad_modules = modules.iter().any(|m| {
-            matches!(m, ModuleKind::Kerberos | ModuleKind::Ldap | ModuleKind::Passive)
+            matches!(
+                m,
+                ModuleKind::Kerberos | ModuleKind::Ldap | ModuleKind::Passive
+            )
         });
-        // Network-hygiene runs (email/tls) query public DNS or specified TLS
-        // endpoints and need neither a Domain Controller nor credentials. AD
-        // modules require both.
+        // Network-hygiene runs query public DNS or explicitly named endpoints
+        // and need neither a Domain Controller nor credentials. AD modules
+        // require both. The email module still needs a domain as its DNS name.
         let credential_free = !ad_modules
-            && modules
-                .iter()
-                .any(|m| matches!(m, ModuleKind::Email | ModuleKind::Tls | ModuleKind::Fs));
+            && modules.iter().any(|m| {
+                matches!(
+                    m,
+                    ModuleKind::Email
+                        | ModuleKind::Tls
+                        | ModuleKind::Fs
+                        | ModuleKind::Web
+                        | ModuleKind::WordPress
+                )
+            });
 
-        let domain = cli
-            .domain
-            .ok_or_else(|| anyhow::anyhow!("--domain is required in CLI mode"))?;
+        let needs_domain = !credential_free
+            || modules.iter().any(|module| {
+                matches!(
+                    module,
+                    ModuleKind::Email
+                        | ModuleKind::Kerberos
+                        | ModuleKind::Ldap
+                        | ModuleKind::Passive
+                )
+            });
+        let domain = match cli.domain {
+            Some(domain) => domain,
+            None if !needs_domain => "external".to_string(),
+            None => anyhow::bail!("--domain is required for the selected module(s)"),
+        };
         let base_dn = domain_to_base_dn(&domain);
 
         let format = match cli.format.to_lowercase().as_str() {
@@ -311,6 +353,24 @@ impl Config {
                         .collect()
                 })
                 .unwrap_or_default(),
+            web_targets: cli
+                .web_target
+                .map(|s| {
+                    s.split(',')
+                        .map(|x| x.trim().to_string())
+                        .filter(|x| !x.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default(),
+            wordpress_targets: cli
+                .wordpress_target
+                .map(|s| {
+                    s.split(',')
+                        .map(|x| x.trim().to_string())
+                        .filter(|x| !x.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default(),
             ai_analyze: cli.ai_analyze || cli.chat,
             chat: cli.chat,
             ai_model: cli.ai_model,
@@ -362,6 +422,8 @@ fn parse_modules(s: &str) -> Vec<ModuleKind> {
             "email" | "mail" => Some(ModuleKind::Email),
             "tls" => Some(ModuleKind::Tls),
             "fs" => Some(ModuleKind::Fs),
+            "web" | "http" => Some(ModuleKind::Web),
+            "wordpress" | "wp" => Some(ModuleKind::WordPress),
             _ => None,
         })
         .collect()
@@ -431,5 +493,49 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(cli.attack_path_output, Some(PathBuf::from("path.json")));
+    }
+
+    #[test]
+    fn parses_local_web_ui_flags() {
+        let cli = Cli::try_parse_from(["diego", "--web-ui", "--web-ui-port", "9898"]).unwrap();
+        assert!(cli.web_ui);
+        assert_eq!(cli.web_ui_port, 9898);
+    }
+
+    #[test]
+    fn endpoint_and_local_modules_do_not_need_a_placeholder_domain() {
+        for args in [
+            vec![
+                "diego",
+                "--modules",
+                "web",
+                "--web-target",
+                "https://example.test/",
+            ],
+            vec![
+                "diego",
+                "--modules",
+                "wordpress",
+                "--wordpress-target",
+                "https://example.test/",
+            ],
+            vec![
+                "diego",
+                "--modules",
+                "tls",
+                "--tls-target",
+                "example.test:443",
+            ],
+            vec!["diego", "--modules", "fs", "--fs-path", "/private/tmp"],
+        ] {
+            let cli = Cli::try_parse_from(args).unwrap();
+            assert_eq!(Config::from_cli(cli).unwrap().domain, "external");
+        }
+    }
+
+    #[test]
+    fn email_still_requires_a_domain() {
+        let cli = Cli::try_parse_from(["diego", "--modules", "email"]).unwrap();
+        assert!(Config::from_cli(cli).is_err());
     }
 }

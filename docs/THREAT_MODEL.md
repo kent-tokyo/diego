@@ -1,81 +1,52 @@
 # diego — Threat Model
 
-This document states what diego is and is not designed to do, so operators and
-defenders can reason about it accurately. It is deliberately conservative:
-where a capability is limited, we say so.
+diego accepts only unprivileged, read-only, bounded checks for authorised
+operators.
 
 ## Goals
 
-- Provide **unprivileged, read-only** Active Directory security diagnostics from
-  a standard domain-user session — surfacing exploitable misconfigurations
-  (AS-REP roastable accounts, Kerberoastable SPNs, unconstrained/constrained
-  delegation, RBCD, weak password policy, credential leaks in descriptions).
-- Emit **prioritised, actionable findings** (severity × confidence, MITRE
-  mapping, remediation steps) in machine- and human-readable formats
-  (JSON / Markdown / HTML / MCP).
-- Run as a **single static binary** with no .NET/PowerShell/Python runtime,
-  reducing host-based EDR telemetry from interpreter/runtime artefacts.
-- Be **honest about detection**: see Detection Assumptions below.
+- Diagnose AD configuration with standard domain-user access, and inspect
+  public email DNS, named TLS endpoints, and named Unix paths without
+  credentials where possible.
+- The unreleased Web and WordPress modules accept only exact, authorised
+  targets with a small documented request bound.
+- Emit prioritised findings and state detection and coverage limits plainly.
 
 ## Non-goals
 
-- **Not an exploitation framework.** diego does not execute code on remote
-  hosts, move laterally, dump LSASS, perform DCSync, or persist. It requests and
-  captures Kerberos evidence for offline analysis; it does not crack hashes.
-  Audit output redacts crackable material unless full export is explicitly
-  requested for an authorised assessment.
-- **Not a detection-evasion guarantee.** Jitter smooths timing/volume; it does
-  not hide the behavioural signature of a request (see below).
-- **Not a full graph collector.** diego collects *findings*, not the complete
-  identity graph (ACLs, sessions, SIDs, full group membership). This is why a
-  valid BloodHound CE export is **not** offered today — a partial graph would
-  mislead more than it helps.
-- **Not a substitute for authorisation.** Use only where you are permitted to
-  run AD diagnostics.
+- No exploitation, remote code execution, lateral movement, persistence,
+  credential cracking, or unauthorised change. Audit output redacts crackable
+  material unless an authorised operator explicitly requests full export.
+- No port scan, path discovery, redirect following, crawl, authentication, form
+  submission, WordPress user/plugin enumeration, CVE verification, or attack
+  payload. The UI is loopback-only, single-target, acknowledged, and stateless.
+- No detection-evasion guarantee or complete identity graph/BloodHound export.
+  Use diego only with authorisation.
 
 ## Detection assumptions
 
-diego is **OPSEC-friendly, not invisible.** Two distinct layers:
-
-1. **Host-based detection of the tool** — *reduced.* As a pure-Rust binary, it
-   produces no .NET CLR / PowerShell / Python runtime artefacts, so ETW / AMSI /
-   Script Block Logging signals that catch Rubeus/PowerView/Impacket on the
-   foothold do not fire.
-2. **DC-side detection of the behaviour** — *still applies.* LDAP enumeration,
-   Kerberoasting (especially RC4 `etype 23` TGS requests), and AS-REP roasting
-   are exactly what directory-side sensors such as **Microsoft Defender for
-   Identity** detect, **regardless of client language**. RC4 Kerberoasting in
-   particular is a loud, well-signatured event.
-
-Treat "low host telemetry" and "undetectable" as different claims — diego makes
-only the former.
+A Rust binary avoids interpreter-runtime artefacts, but is **not invisible**.
+Directory monitoring can observe LDAP/Kerberos activity; external Web checks can
+appear in server, CDN, WAF, and network logs. Jitter changes timing, not the
+request pattern.
 
 ## Supported environments
 
-- **Operator host:** Linux or Windows; single static binary (musl static build
-  for Linux). macOS for development.
-- **Privilege:** standard domain user. No administrator rights at any stage.
-- **Target:** on-premises Active Directory reachable over LDAP (389) and
-  Kerberos (88); passive monitoring requires a local interface in the broadcast
+- **Host and privilege:** Linux or Windows, standard domain user; macOS is for
+  development. Passive monitoring needs a local interface in the broadcast
   domain.
-- **Out of scope today:** Entra ID / Azure / AWS / GCP identity (a possible
-  future direction, not implemented).
+- **Inputs:** AD uses LDAP/Kerberos; email, TLS, Web, and WordPress checks need
+  explicit inputs. Cloud identity is out of scope.
 
 ## Limitations / known gaps
 
-- **Not collected:** object SIDs, full `memberOf` graph, ACLs (GenericAll etc.),
-  active sessions, local-admin relationships, GPO/OU/Container objects.
-- **Heuristic findings** (e.g. credential-in-description) are reported at
-  **Medium confidence** and require human review; deterministic findings
-  (captured hashes, UAC flags) are High confidence.
-- **Offline only** for hash material — no cracking is performed or assisted.
-- **No keytab/TGT authentication yet:** detection of local Kerberos artifacts is
-  not GSSAPI/SASL support; provide a password until that support is implemented.
-- **Performance at scale** is not yet benchmarked against a large lab forest;
-  see [BENCHMARKS.md](BENCHMARKS.md) (results pending).
+- No full identity graph, ACL/session/local-admin/GPO collection, or
+  keytab/TGT authentication.
+- Heuristic findings need human review. Web/WordPress findings describe posture,
+  not CVE applicability or exploitability.
+- Scale performance is unmeasured; see [BENCHMARKS.md](BENCHMARKS.md).
 
 ## Responsible use
 
-diego is intended for authorised security diagnostics, CTFs, lab research, and
-defensive baselining. Running it against directories you do not own or are not
-explicitly authorised to assess may be illegal.
+Use only for authorised security diagnostics, CTFs, lab research, or defensive
+baselining.

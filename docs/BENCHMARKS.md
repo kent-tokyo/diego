@@ -1,10 +1,8 @@
 # diego — Benchmarks
 
-> **Status: not yet measured.** The methodology and harness below are defined,
-> but the result tables are placeholders pending a controlled lab run against a
-> representative forest. We do not publish fabricated numbers — see the project's
-> stance on claims vs. evidence in the README's *Detection considerations* and
-> [THREAT_MODEL.md](THREAT_MODEL.md).
+> **Status: no measurements are published.** Use this method only in a
+> controlled, authorised lab. Until a run records its conditions and raw
+> results, diego makes no performance or coverage claim.
 
 ## What we measure
 
@@ -20,7 +18,7 @@ Jitter is **disabled or fixed** for benchmarking (it adds deliberate sleeps and
 would otherwise dominate wall-clock); the configured jitter range is recorded
 alongside results so timings are interpretable.
 
-## Test matrix (planned)
+## Planned lab matrix
 
 | Scenario | Users | Computers | Domains | Notes |
 |----------|-------|-----------|---------|-------|
@@ -49,14 +47,9 @@ selection, and a redacted environment description.
 
 ## Results
 
-| Scenario | diego version | Elapsed | Peak RSS | LDAP queries | Findings |
-|----------|---------------|---------|----------|--------------|----------|
-| Small    | —             | TBD     | TBD      | TBD          | TBD      |
-| Medium   | —             | TBD     | TBD      | TBD          | TBD      |
-| Large    | —             | TBD     | TBD      | TBD          | TBD      |
-
-Until a controlled lab run fills this table, every performance claim is
-**unmeasured**, not zero.
+No result table is maintained until a controlled lab run can include the
+version, environment, command, raw measurements, and redaction rationale.
+Unmeasured performance is not zero performance.
 
 ## Contributing measurements
 

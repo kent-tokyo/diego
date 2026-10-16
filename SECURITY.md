@@ -6,10 +6,12 @@ diego is a defensive/diagnostic security tool. This policy covers vulnerabilitie
 **in diego itself** — for example:
 
 - memory-safety or panic issues in protocol parsing (Kerberos ASN.1, LDAP,
-  packet handling);
+  packet handling, DNS, TLS, HTTP, or WordPress responses);
 - a crafted server response or directory value that causes a crash or, in the
   HTML report, escapes HTML escaping (XSS in the generated report);
-- credential handling defects (e.g. secrets not zeroized).
+- credential handling defects (e.g. secrets not zeroized);
+- a local Web UI binding beyond loopback, accepting an unsafe target, or sending
+  a request outside its documented bound.
 
 It does **not** cover misconfigurations in *your* Active Directory — diego's job
 is to help you find those.

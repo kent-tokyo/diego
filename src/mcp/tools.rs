@@ -9,12 +9,12 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::config::Config;
-use crate::modules::kerberos::asreq::{build_asrep_roast_request, parse_kdc_response, KdcResponse};
+use crate::modules::kerberos::asreq::{KdcResponse, build_asrep_roast_request, parse_kdc_response};
 use crate::modules::kerberos::mod_send_kerberos_tcp;
 use crate::modules::ldap::parser::extract_spn_accounts;
 use crate::modules::ldap::queries::{
-    query_asrep_candidates, query_description_leaks, query_password_policy,
-    query_spn_accounts, query_unconstrained_delegation,
+    query_asrep_candidates, query_description_leaks, query_password_policy, query_spn_accounts,
+    query_unconstrained_delegation,
 };
 use crate::modules::passive::llmnr::{capture_llmnr, capture_nbtns};
 use crate::report::{Finding, Severity};
@@ -23,7 +23,7 @@ use super::common::{AdRequest, get_str, get_timeout, has_protocol_transition};
 use super::schema::tool_list as schema_tool_list;
 
 #[cfg(test)]
-use super::common::{domain_to_base_dn, TRUSTED_TO_AUTH_FOR_DELEGATION};
+use super::common::{TRUSTED_TO_AUTH_FOR_DELEGATION, domain_to_base_dn};
 #[cfg(test)]
 use super::schema::make_tool as schema_make_tool;
 
@@ -43,18 +43,18 @@ fn make_tool(name: &str, description: &str, schema: Value) -> Value {
 pub async fn dispatch(name: &str, args: &Value) -> anyhow::Result<Value> {
     match name {
         "enumerate_asrep_candidates" => enumerate_asrep_candidates(args).await,
-        "enumerate_spn_accounts"     => enumerate_spn_accounts(args).await,
+        "enumerate_spn_accounts" => enumerate_spn_accounts(args).await,
         "check_unconstrained_delegation" => check_unconstrained_delegation(args).await,
-        "check_password_policy"      => check_password_policy(args).await,
-        "scan_description_leaks"     => scan_description_leaks(args).await,
-        "run_asrep_roasting"         => run_asrep_roasting(args).await,
-        "run_kerberoasting"          => run_kerberoasting(args).await,
-        "listen_llmnr"               => listen_llmnr(args).await,
+        "check_password_policy" => check_password_policy(args).await,
+        "scan_description_leaks" => scan_description_leaks(args).await,
+        "run_asrep_roasting" => run_asrep_roasting(args).await,
+        "run_kerberoasting" => run_kerberoasting(args).await,
+        "listen_llmnr" => listen_llmnr(args).await,
         "enumerate_constrained_delegation" => mcp_constrained_delegation(args).await,
-        "enumerate_rbcd"             => mcp_rbcd(args).await,
+        "enumerate_rbcd" => mcp_rbcd(args).await,
         "enumerate_privileged_groups" => mcp_privileged_groups(args).await,
         "enumerate_stale_service_passwords" => mcp_stale_passwords(args).await,
-        "full_scan"                  => full_scan(args).await,
+        "full_scan" => full_scan(args).await,
         _ => anyhow::bail!("Unknown tool: {}", name),
     }
 }
@@ -69,7 +69,8 @@ async fn enumerate_asrep_candidates(args: &Value) -> anyhow::Result<Value> {
     let objs = query_asrep_candidates(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
-    let result: Vec<Value> = objs.iter()
+    let result: Vec<Value> = objs
+        .iter()
         .filter_map(|o| {
             let sam = o.get_first("sAMAccountName")?;
             Some(serde_json::json!({ "username": sam, "dn": o.dn }))
@@ -87,7 +88,8 @@ async fn enumerate_spn_accounts(args: &Value) -> anyhow::Result<Value> {
     let objs = query_spn_accounts(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
-    let result: Vec<Value> = objs.iter()
+    let result: Vec<Value> = objs
+        .iter()
         .filter_map(|o| {
             let sam = o.get_first("sAMAccountName")?;
             let spns = o.get_all("servicePrincipalName");
@@ -107,13 +109,16 @@ async fn check_unconstrained_delegation(args: &Value) -> anyhow::Result<Value> {
     let objs = query_unconstrained_delegation(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
-    let result: Vec<Value> = objs.iter()
-        .map(|o| serde_json::json!({
-            "cn": o.get_first("cn"),
-            "dnsHostName": o.get_first("dnsHostName"),
-            "os": o.get_first("operatingSystem"),
-            "dn": o.dn,
-        }))
+    let result: Vec<Value> = objs
+        .iter()
+        .map(|o| {
+            serde_json::json!({
+                "cn": o.get_first("cn"),
+                "dnsHostName": o.get_first("dnsHostName"),
+                "os": o.get_first("operatingSystem"),
+                "dn": o.dn,
+            })
+        })
         .collect();
 
     Ok(serde_json::json!({
@@ -157,7 +162,8 @@ async fn scan_description_leaks(args: &Value) -> anyhow::Result<Value> {
     let objs = query_description_leaks(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
-    let result: Vec<Value> = objs.iter()
+    let result: Vec<Value> = objs
+        .iter()
         .filter_map(|o| {
             let sam = o.get_first("sAMAccountName")?;
             let desc = o.get_first("description")?;
@@ -174,12 +180,14 @@ async fn run_asrep_roasting(args: &Value) -> anyhow::Result<Value> {
     let timeout = get_timeout(args);
     let realm = domain.to_uppercase();
 
-    let usernames: Vec<&str> = args.get("usernames")
+    let usernames: Vec<&str> = args
+        .get("usernames")
         .and_then(Value::as_array)
         .map(|a| a.iter().filter_map(Value::as_str).collect())
         .unwrap_or_default();
 
-    let dc_addr: std::net::SocketAddr = format!("{}:88", dc_ip).parse()
+    let dc_addr: std::net::SocketAddr = format!("{}:88", dc_ip)
+        .parse()
         .map_err(|_| anyhow::anyhow!("Invalid DC IP: {}", dc_ip))?;
 
     let mut hashes = Vec::new();
@@ -225,7 +233,9 @@ async fn run_kerberoasting(args: &Value) -> anyhow::Result<Value> {
 
     let spn_accounts = extract_spn_accounts(&spn_objs);
     if spn_accounts.is_empty() {
-        return Ok(serde_json::json!({ "hashes": [], "count": 0, "message": "No SPN accounts found" }));
+        return Ok(
+            serde_json::json!({ "hashes": [], "count": 0, "message": "No SPN accounts found" }),
+        );
     }
 
     let config = build_minimal_config(
@@ -246,34 +256,41 @@ async fn run_kerberoasting(args: &Value) -> anyhow::Result<Value> {
     let findings = kerb_mod.run(Arc::new(config)).await.unwrap_or_default();
 
     // ponytail: hash omitted — MCP is always audit mode; use CLI --mode full --export-hashes for crack material
-    let hashes: Vec<Value> = findings.iter()
+    let hashes: Vec<Value> = findings
+        .iter()
         .filter(|f| f.id.starts_with("KERB-TGS-"))
-        .map(|f| serde_json::json!({
-            "id": f.id,
-            "account": f.evidence.get("sam_name"),
-            "spn": f.evidence.get("spn"),
-            "etype": f.evidence.get("etype"),
-            "vulnerable": true,
-        }))
+        .map(|f| {
+            serde_json::json!({
+                "id": f.id,
+                "account": f.evidence.get("sam_name"),
+                "spn": f.evidence.get("spn"),
+                "etype": f.evidence.get("etype"),
+                "vulnerable": true,
+            })
+        })
         .collect();
 
     Ok(serde_json::json!({ "hashes": hashes, "count": hashes.len() }))
 }
 
 async fn listen_llmnr(args: &Value) -> anyhow::Result<Value> {
-    let timeout = args.get("timeout_secs").and_then(Value::as_u64).unwrap_or(30);
+    let timeout = args
+        .get("timeout_secs")
+        .and_then(Value::as_u64)
+        .unwrap_or(30);
 
-    let (llmnr, nbtns) = tokio::join!(
-        capture_llmnr(timeout),
-        capture_nbtns(timeout),
-    );
+    let (llmnr, nbtns) = tokio::join!(capture_llmnr(timeout), capture_nbtns(timeout),);
 
-    let all: Vec<Value> = llmnr.iter().chain(nbtns.iter())
-        .map(|c| serde_json::json!({
-            "protocol": c.protocol,
-            "source_ip": c.source_ip,
-            "queried_name": c.queried_name,
-        }))
+    let all: Vec<Value> = llmnr
+        .iter()
+        .chain(nbtns.iter())
+        .map(|c| {
+            serde_json::json!({
+                "protocol": c.protocol,
+                "source_ip": c.source_ip,
+                "queried_name": c.queried_name,
+            })
+        })
         .collect();
 
     Ok(serde_json::json!({
@@ -288,10 +305,12 @@ async fn mcp_constrained_delegation(args: &Value) -> anyhow::Result<Value> {
     let base_dn = request.base_dn();
 
     let mut ldap = request.connect().await?;
-    let objs = crate::modules::ldap::queries::query_constrained_delegation(&mut ldap, &base_dn).await?;
+    let objs =
+        crate::modules::ldap::queries::query_constrained_delegation(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
-    let result: Vec<Value> = objs.iter()
+    let result: Vec<Value> = objs
+        .iter()
         .filter_map(|o| {
             let name = o.get_first("sAMAccountName")?;
             let targets = o.get_all("msDS-AllowedToDelegateTo");
@@ -318,13 +337,16 @@ async fn mcp_rbcd(args: &Value) -> anyhow::Result<Value> {
     let objs = crate::modules::ldap::queries::query_rbcd(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
-    let result: Vec<Value> = objs.iter()
-        .map(|o| serde_json::json!({
-            "cn": o.get_first("cn"),
-            "sam_name": o.get_first("sAMAccountName"),
-            "dnsHostName": o.get_first("dnsHostName"),
-            "dn": o.dn,
-        }))
+    let result: Vec<Value> = objs
+        .iter()
+        .map(|o| {
+            serde_json::json!({
+                "cn": o.get_first("cn"),
+                "sam_name": o.get_first("sAMAccountName"),
+                "dnsHostName": o.get_first("dnsHostName"),
+                "dn": o.dn,
+            })
+        })
         .collect();
 
     Ok(serde_json::json!({ "rbcd_objects": result, "count": result.len() }))
@@ -335,12 +357,15 @@ async fn mcp_privileged_groups(args: &Value) -> anyhow::Result<Value> {
     let base_dn = request.base_dn();
 
     let mut ldap = request.connect().await?;
-    let groups = crate::modules::ldap::queries::query_privileged_groups(&mut ldap, &base_dn).await?;
+    let groups =
+        crate::modules::ldap::queries::query_privileged_groups(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
-    let result: Vec<Value> = groups.iter()
+    let result: Vec<Value> = groups
+        .iter()
         .map(|(group, members)| {
-            let names: Vec<&str> = members.iter()
+            let names: Vec<&str> = members
+                .iter()
                 .filter_map(|m| m.get_first("sAMAccountName"))
                 .collect();
             serde_json::json!({ "group": group, "member_count": members.len(), "members": names })
@@ -355,15 +380,21 @@ async fn mcp_stale_passwords(args: &Value) -> anyhow::Result<Value> {
     let base_dn = request.base_dn();
 
     let mut ldap = request.connect().await?;
-    let objs = crate::modules::ldap::queries::query_stale_service_passwords(&mut ldap, &base_dn).await?;
+    let objs =
+        crate::modules::ldap::queries::query_stale_service_passwords(&mut ldap, &base_dn).await?;
     ldap.unbind().await.ok();
 
-    let result: Vec<Value> = objs.iter()
+    let result: Vec<Value> = objs
+        .iter()
         .filter_map(|o| {
             let name = o.get_first("sAMAccountName")?;
             let pwd_ts = o.get_first("pwdLastSet").unwrap_or("0");
-            let age_days = pwd_ts.parse::<i64>()
-                .map(|ts| (chrono::Utc::now().timestamp() - (ts - 116_444_736_000_000_000) / 10_000_000) / 86400)
+            let age_days = pwd_ts
+                .parse::<i64>()
+                .map(|ts| {
+                    (chrono::Utc::now().timestamp() - (ts - 116_444_736_000_000_000) / 10_000_000)
+                        / 86400
+                })
                 .unwrap_or(0);
             Some(serde_json::json!({
                 "account": name,
@@ -394,10 +425,15 @@ async fn full_scan(args: &Value) -> anyhow::Result<Value> {
 
     let (_, ctx) = crate::modules::ldap::run_ldap_and_extract_context(Arc::clone(&config))
         .await
-        .unwrap_or_else(|_| (vec![], crate::modules::LdapContext {
-            asrep_candidates: vec![],
-            spn_accounts: vec![],
-        }));
+        .unwrap_or_else(|_| {
+            (
+                vec![],
+                crate::modules::LdapContext {
+                    asrep_candidates: vec![],
+                    spn_accounts: vec![],
+                },
+            )
+        });
 
     let kerb_mod = crate::modules::kerberos::KerberosModule::new(ctx);
     let kerb_findings = kerb_mod.run(Arc::clone(&config)).await.unwrap_or_default();
@@ -413,11 +449,14 @@ async fn full_scan(args: &Value) -> anyhow::Result<Value> {
     });
 
     // Redact hash material — MCP is always audit mode.
-    let redacted: Vec<Finding> = all.iter().map(|f| {
-        let mut f = (*f).clone();
-        crate::report::redact_evidence(&mut f.evidence);
-        f
-    }).collect();
+    let redacted: Vec<Finding> = all
+        .iter()
+        .map(|f| {
+            let mut f = (*f).clone();
+            crate::report::redact_evidence(&mut f.evidence);
+            f
+        })
+        .collect();
 
     Ok(serde_json::json!({
         "findings": redacted,
@@ -435,14 +474,17 @@ fn build_minimal_config(
     use std::net::IpAddr;
     use std::str::FromStr;
 
-    let ip = IpAddr::from_str(dc_ip)
-        .map_err(|_| anyhow::anyhow!("Invalid DC IP: {}", dc_ip))?;
+    let ip = IpAddr::from_str(dc_ip).map_err(|_| anyhow::anyhow!("Invalid DC IP: {}", dc_ip))?;
 
     use zeroize::Zeroizing;
     Ok(Config {
         dc_ip: ip,
         domain: domain.to_string(),
-        base_dn: domain.split('.').map(|p| format!("DC={}", p)).collect::<Vec<_>>().join(","),
+        base_dn: domain
+            .split('.')
+            .map(|p| format!("DC={}", p))
+            .collect::<Vec<_>>()
+            .join(","),
         username: username.to_string(),
         password: Zeroizing::new(password.to_string()),
         modules: vec![
@@ -458,6 +500,8 @@ fn build_minimal_config(
         dkim_selectors: Vec::new(),
         tls_targets: Vec::new(),
         fs_paths: Vec::new(),
+        web_targets: Vec::new(),
+        wordpress_targets: Vec::new(),
         ai_analyze: false,
         chat: false,
         ai_model: crate::ai::claude::DEFAULT_MODEL.to_string(),
@@ -496,8 +540,13 @@ mod tests {
     #[test]
     fn test_tool_list_contains_required_tools() {
         let tools = tool_list();
-        let names: Vec<String> = tools.iter()
-            .filter_map(|t| t.get("name").and_then(|v| v.as_str()).map(|s| s.to_string()))
+        let names: Vec<String> = tools
+            .iter()
+            .filter_map(|t| {
+                t.get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
             .collect();
 
         assert!(names.contains(&"enumerate_asrep_candidates".to_string()));
@@ -513,8 +562,14 @@ mod tests {
 
         for tool in tools {
             assert!(tool.get("name").is_some(), "Tool must have 'name'");
-            assert!(tool.get("description").is_some(), "Tool must have 'description'");
-            assert!(tool.get("inputSchema").is_some(), "Tool must have 'inputSchema'");
+            assert!(
+                tool.get("description").is_some(),
+                "Tool must have 'description'"
+            );
+            assert!(
+                tool.get("inputSchema").is_some(),
+                "Tool must have 'inputSchema'"
+            );
         }
     }
 
@@ -530,7 +585,10 @@ mod tests {
         );
 
         assert_eq!(tool.get("name").and_then(|v| v.as_str()), Some("test_tool"));
-        assert_eq!(tool.get("description").and_then(|v| v.as_str()), Some("This is a test tool"));
+        assert_eq!(
+            tool.get("description").and_then(|v| v.as_str()),
+            Some("This is a test tool")
+        );
         assert!(tool.get("inputSchema").is_some());
     }
 
@@ -539,11 +597,15 @@ mod tests {
         let tools = tool_list();
 
         for tool in tools {
-            let desc = tool.get("description")
+            let desc = tool
+                .get("description")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             assert!(!desc.is_empty(), "Tool description must not be empty");
-            assert!(desc.len() > 20, "Tool description should be sufficiently detailed");
+            assert!(
+                desc.len() > 20,
+                "Tool description should be sufficiently detailed"
+            );
         }
     }
 
@@ -692,25 +754,33 @@ mod tests {
     #[test]
     fn test_asrep_roasting_has_usernames_param() {
         let tools = tool_list();
-        let asrep_tool = tools.iter()
+        let asrep_tool = tools
+            .iter()
             .find(|t| t.get("name").and_then(|v| v.as_str()) == Some("run_asrep_roasting"))
             .expect("asrep roasting tool should exist");
 
         let schema = asrep_tool.get("inputSchema").expect("has schema");
         let props = schema.get("properties").expect("has properties");
-        assert!(props.get("usernames").is_some(), "Should have usernames parameter");
+        assert!(
+            props.get("usernames").is_some(),
+            "Should have usernames parameter"
+        );
     }
 
     #[test]
     fn test_listen_llmnr_has_timeout_param() {
         let tools = tool_list();
-        let listen_tool = tools.iter()
+        let listen_tool = tools
+            .iter()
             .find(|t| t.get("name").and_then(|v| v.as_str()) == Some("listen_llmnr"))
             .expect("listen_llmnr tool should exist");
 
         let schema = listen_tool.get("inputSchema").expect("has schema");
         let props = schema.get("properties").expect("has properties");
-        assert!(props.get("timeout_secs").is_some(), "Should have timeout_secs parameter");
+        assert!(
+            props.get("timeout_secs").is_some(),
+            "Should have timeout_secs parameter"
+        );
     }
 
     // ─── Phase 5: Config Building Tests ────────────────────────────────
@@ -728,7 +798,8 @@ mod tests {
 
     #[test]
     fn test_build_minimal_config_timeout() {
-        let config = build_minimal_config("10.0.0.1", "example.com", "admin", "secret", 30).unwrap();
+        let config =
+            build_minimal_config("10.0.0.1", "example.com", "admin", "secret", 30).unwrap();
         assert_eq!(config.timeout_secs, 30);
     }
 
@@ -742,7 +813,10 @@ mod tests {
     fn test_build_minimal_config_modules() {
         let config = build_minimal_config("1.1.1.1", "test.local", "u", "p", 5).unwrap();
         assert!(!config.modules.is_empty(), "Should have modules configured");
-        assert!(config.modules.len() >= 2, "Should have at least LDAP and Kerberos");
+        assert!(
+            config.modules.len() >= 2,
+            "Should have at least LDAP and Kerberos"
+        );
     }
 
     #[test]
@@ -756,7 +830,8 @@ mod tests {
     #[test]
     fn test_dispatch_tool_names_match_list() {
         let tools = tool_list();
-        let tool_names: Vec<&str> = tools.iter()
+        let tool_names: Vec<&str> = tools
+            .iter()
             .filter_map(|t| t.get("name").and_then(|v| v.as_str()))
             .collect();
 
@@ -770,8 +845,13 @@ mod tests {
     #[test]
     fn test_tool_names_are_unique() {
         let tools = tool_list();
-        let names: Vec<String> = tools.iter()
-            .filter_map(|t| t.get("name").and_then(|v| v.as_str()).map(|s| s.to_string()))
+        let names: Vec<String> = tools
+            .iter()
+            .filter_map(|t| {
+                t.get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
             .collect();
 
         assert_eq!(names.len(), tools.len(), "All tool names should be unique");

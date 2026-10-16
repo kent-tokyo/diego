@@ -10,6 +10,7 @@ use crate::report::fleet::{FleetReport, PlanCheckpoint, PlanTarget, ScanPlan, Ta
 use crate::report::governance::GovernanceConfig;
 use crate::report::{self, Report};
 use crate::run_scan;
+use crate::web_ui;
 
 pub async fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -21,6 +22,11 @@ pub async fn run() -> anyhow::Result<()> {
 
     if cli.mcp_init {
         print_mcp_init()?;
+        return Ok(());
+    }
+
+    if cli.web_ui {
+        web_ui::serve(cli.web_ui_port).await?;
         return Ok(());
     }
 
