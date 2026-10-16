@@ -26,7 +26,9 @@ External Web checks are deliberately narrow: one unauthenticated request per
 URL, plus a range-limited GET only when HEAD is unsupported. They do not follow
 redirects, crawl, discover paths, authenticate, submit forms, enumerate users
 or plugins, verify CVEs, or send attack payloads. HTTPS error responses are
-inconclusive, not missing-header findings.
+inconclusive, not missing-header findings. The
+[evidence contract](docs/POSTURE_EVIDENCE.md) defines Web/WordPress outcomes
+and request counters.
 
 ## Quick start
 
@@ -105,6 +107,7 @@ cargo clippy --all -- -D warnings
 - [Roadmap](ROADMAP.md) — release status and next gates
 - [Threat model](docs/THREAT_MODEL.md) — supported scope and non-goals
 - [Testing](docs/TESTING.md) — coverage boundaries
+- [Web and WordPress evidence](docs/POSTURE_EVIDENCE.md) — outcome and request-count contract
 - [Benchmarks](docs/BENCHMARKS.md) — lab methodology; no measured results yet
 - [Contributing](CONTRIBUTING.md) and [security policy](SECURITY.md)
 - [Report schema](docs/report.schema.json), [sample report](docs/sample-report.html), and [sample JSON](docs/sample-findings.json)

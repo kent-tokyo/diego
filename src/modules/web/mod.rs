@@ -17,7 +17,7 @@ use reqwest::{Client, StatusCode, Url, redirect::Policy};
 
 use crate::config::Config;
 use crate::modules::DiagnosticModule;
-use crate::report::{Confidence, Finding, Severity};
+use crate::report::{Confidence, Finding, Outcome, Severity};
 
 use self::analyze::{Conf, Issue, Sev};
 
@@ -52,6 +52,11 @@ fn map_confidence(confidence: Conf) -> Confidence {
 }
 
 fn finding(issue: Issue) -> Finding {
+    let outcome = if issue.id == "WEB-RESPONSE-INCONCLUSIVE" {
+        Outcome::Inconclusive
+    } else {
+        Outcome::Confirmed
+    };
     let evidence = serde_json::Value::Object(
         issue
             .evidence
@@ -69,7 +74,40 @@ fn finding(issue: Issue) -> Finding {
         None,
     )
     .with_confidence(map_confidence(issue.conf))
+    .with_outcome(outcome)
     .with_remediation(issue.remediation.to_vec())
+}
+
+fn observed_header_names(headers: &HeaderMap) -> Vec<String> {
+    const RELEVANT: [&str; 9] = [
+        "location",
+        "strict-transport-security",
+        "content-security-policy",
+        "x-frame-options",
+        "x-content-type-options",
+        "referrer-policy",
+        "set-cookie",
+        "server",
+        "x-powered-by",
+    ];
+    RELEVANT
+        .iter()
+        .filter(|name| headers.contains_key(**name))
+        .map(|name| (*name).to_string())
+        .collect()
+}
+
+fn add_probe_evidence(mut finding: Finding, requests: u8, headers: Option<&HeaderMap>) -> Finding {
+    if let Some(evidence) = finding.evidence.as_object_mut() {
+        evidence.insert("request_count".into(), serde_json::json!(requests));
+        if let Some(headers) = headers {
+            evidence.insert(
+                "observed_header_names".into(),
+                serde_json::json!(observed_header_names(headers)),
+            );
+        }
+    }
+    finding
 }
 
 fn response_headers(headers: &HeaderMap) -> Vec<(String, String)> {
@@ -101,16 +139,29 @@ fn validate_target(raw: &str) -> anyhow::Result<Url> {
     Ok(url)
 }
 
-async fn request_headers(client: &Client, url: Url) -> anyhow::Result<(StatusCode, HeaderMap)> {
-    let response = client.head(url.clone()).send().await?;
+async fn request_headers(
+    client: &Client,
+    url: Url,
+) -> (reqwest::Result<(StatusCode, HeaderMap)>, u8) {
+    let response = match client.head(url.clone()).send().await {
+        Ok(response) => response,
+        Err(error) => return (Err(error), 1),
+    };
     if matches!(
         response.status(),
         StatusCode::METHOD_NOT_ALLOWED | StatusCode::NOT_IMPLEMENTED
     ) {
-        let response = client.get(url).header(RANGE, "bytes=0-0").send().await?;
-        return Ok((response.status(), response.headers().clone()));
+        return (
+            client
+                .get(url)
+                .header(RANGE, "bytes=0-0")
+                .send()
+                .await
+                .map(|response| (response.status(), response.headers().clone())),
+            2,
+        );
     }
-    Ok((response.status(), response.headers().clone()))
+    (Ok((response.status(), response.headers().clone())), 1)
 }
 
 /// Run the bounded header checks for one explicitly named HTTP(S) URL.
@@ -121,7 +172,13 @@ async fn request_headers(client: &Client, url: Url) -> anyhow::Result<(StatusCod
 pub async fn scan_target(raw: &str, timeout_secs: u64) -> Vec<Finding> {
     let url = match validate_target(raw) {
         Ok(url) => url,
-        Err(error) => return vec![Finding::skipped("web", &format!("{raw}: {error}"))],
+        Err(error) => {
+            let mut skipped = Finding::skipped("web", &format!("Target rejected: {error}"))
+                .with_outcome(Outcome::Unavailable);
+            skipped.evidence =
+                serde_json::json!({"request_count": 0, "failure_reason": "invalid_target"});
+            return vec![skipped];
+        }
     };
     let client = match Client::builder()
         .redirect(Policy::none())
@@ -135,26 +192,43 @@ pub async fn scan_target(raw: &str, timeout_secs: u64) -> Vec<Finding> {
     {
         Ok(client) => client,
         Err(error) => {
-            return vec![Finding::skipped(
+            let mut skipped = Finding::skipped(
                 "web",
-                &format!("{raw}: could not initialise HTTP client ({error})"),
-            )];
+                &format!("Could not initialise HTTP client ({error})"),
+            )
+            .with_outcome(Outcome::Unavailable);
+            skipped.evidence =
+                serde_json::json!({"request_count": 0, "failure_reason": "client_initialization"});
+            return vec![skipped];
         }
     };
     let target = url.as_str().to_string();
     eprintln!("[+] web: checking {target}");
-    match request_headers(&client, url.clone()).await {
+    let (result, requests) = request_headers(&client, url.clone()).await;
+    match result {
         Ok((status, headers)) => {
-            let headers = response_headers(&headers);
-            analyze::analyze(&target, url.scheme() == "https", status.as_u16(), &headers)
+            let parsed = response_headers(&headers);
+            analyze::analyze(&target, url.scheme() == "https", status.as_u16(), &parsed)
                 .into_iter()
-                .map(finding)
+                .map(|issue| add_probe_evidence(finding(issue), requests, Some(&headers)))
                 .collect()
         }
-        Err(error) => vec![Finding::skipped(
-            "web",
-            &format!("{target}: request failed ({error})"),
-        )],
+        Err(error) => {
+            let reason = if error.is_timeout() {
+                "timeout"
+            } else if error.is_connect() {
+                "connection_failed"
+            } else {
+                "request_failed"
+            };
+            let mut skipped =
+                Finding::skipped("web", &format!("{target}: request failed ({error})"))
+                    .with_outcome(Outcome::Unavailable);
+            skipped.evidence = serde_json::json!({
+                "target": target, "request_count": requests, "failure_reason": reason,
+            });
+            vec![skipped]
+        }
     }
 }
 

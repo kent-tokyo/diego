@@ -110,6 +110,14 @@ pub fn analyze_root(
     headers: &[(String, String)],
     body_prefix: &str,
 ) -> Vec<Issue> {
+    if !(200..300).contains(&status) {
+        return vec![Issue::new(
+            "WP-ROOT-INCONCLUSIVE", Sev::Info, Conf::High,
+            "Site root did not return a successful response",
+            "The site root returned a redirect or error response. No WordPress exposure conclusion was drawn and redirects were not followed.",
+            &[],
+        ).evidence("target", target).evidence("status", status.to_string())];
+    }
     let mut issues = Vec::new();
     if let Some(version) = generator_version(body_prefix) {
         issues.push(
@@ -157,13 +165,13 @@ pub fn analyze_root(
 
 pub fn analyze_endpoint(target: &str, path: &str, status: u16) -> Option<Issue> {
     match path {
-        "xmlrpc.php" if status != 404 => Some(
+        "xmlrpc.php" if (200..300).contains(&status) => Some(
             Issue::new(
                 "WP-XMLRPC-EXPOSED",
                 Sev::Medium,
                 Conf::Medium,
                 "WordPress XML-RPC endpoint appears reachable",
-                "The standard xmlrpc.php endpoint did not return 404 to a safe HEAD request. This does not confirm that any XML-RPC method is enabled, but the endpoint should be reviewed when unused.",
+                "The standard xmlrpc.php URL returned a successful response to a safe HEAD request. This does not confirm that any XML-RPC method is enabled, but the endpoint should be reviewed when unused.",
                 &["Disable XML-RPC when it is not needed, or restrict it at the reverse proxy/WAF."],
             )
             .evidence("target", target)
@@ -174,8 +182,8 @@ pub fn analyze_endpoint(target: &str, path: &str, status: u16) -> Option<Issue> 
                 "WP-REST-API-PUBLIC",
                 Sev::Info,
                 Conf::High,
-                "WordPress REST API index is publicly reachable",
-                "The public REST API index responded successfully. Public availability is a WordPress default, not by itself a vulnerability; review exposed routes and authentication policy separately.",
+                "Standard wp-json path returned a successful response",
+                "The public wp-json URL returned a successful HEAD response. The response body and REST API semantics were not verified; public availability alone is not a vulnerability.",
                 &[],
             )
             .evidence("target", target)
@@ -186,12 +194,21 @@ pub fn analyze_endpoint(target: &str, path: &str, status: u16) -> Option<Issue> 
                 "WP-README-EXPOSED",
                 Sev::Low,
                 Conf::High,
-                "WordPress readme.html is publicly reachable",
-                "The standard readme.html path responded successfully. It can disclose deployment information and is usually unnecessary in production.",
+                "Standard readme.html path returned a successful response",
+                "The standard readme.html URL returned a successful HEAD response. Its contents were not verified; review whether the path discloses deployment information.",
                 &["Remove or deny public access to readme.html in production."],
             )
             .evidence("target", target)
             .evidence("status", status.to_string()),
+        ),
+        _ if status != 404 => Some(
+            Issue::new(
+                "WP-ENDPOINT-INCONCLUSIVE", Sev::Info, Conf::High,
+                "WordPress path response is inconclusive",
+                "The HEAD response did not establish that the requested WordPress path is publicly reachable. Redirects were not followed.",
+                &[],
+            ).evidence("target", target).evidence("path", path)
+             .evidence("status", status.to_string()),
         ),
         _ => None,
     }
@@ -212,9 +229,20 @@ mod tests {
     }
 
     #[test]
-    fn xmlrpc_non_404_is_a_review_finding() {
+    fn xmlrpc_head_405_is_inconclusive() {
         let issue = analyze_endpoint("https://example.test/", "xmlrpc.php", 405).expect("issue");
-        assert_eq!(issue.id, "WP-XMLRPC-EXPOSED");
-        assert_eq!(issue.sev, Sev::Medium);
+        assert_eq!(issue.id, "WP-ENDPOINT-INCONCLUSIVE");
+        assert_eq!(issue.sev, Sev::Info);
+    }
+
+    #[test]
+    fn redirects_and_errors_do_not_claim_wordpress_exposure() {
+        let root = analyze_root("https://example.test/", 302, &[], "");
+        assert_eq!(root[0].id, "WP-ROOT-INCONCLUSIVE");
+        for status in [302, 403, 500] {
+            let issue = analyze_endpoint("https://example.test/", "xmlrpc.php", status).unwrap();
+            assert_eq!(issue.id, "WP-ENDPOINT-INCONCLUSIVE");
+        }
+        assert!(analyze_endpoint("https://example.test/", "xmlrpc.php", 404).is_none());
     }
 }

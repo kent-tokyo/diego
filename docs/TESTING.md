@@ -10,6 +10,7 @@ behaviour named in its final column.
 | **Integration** | `tests/ldap_integration_tests.rs`, `tests/mock_kdc.rs` | LDAP filter strings / OID constants; Kerberos KDC response parsing (AS-REP flow, malformed input). | The end-to-end fetch→analyze path against a directory. |
 | **Web-header unit** | `src/modules/web/analyze.rs` | Explicit HTTP/HTTPS target validation plus deterministic status, HSTS, framing-policy, security-header, redirect, and cookie-attribute classification. | A live server's configuration, redirect destination, page body, or application behaviour. |
 | **WordPress unit** | `src/modules/wordpress/analyze.rs` | Bounded public WordPress exposure classification and exact site-root validation. | Plugin/user enumeration, authentication, CVE applicability, or exploitability. |
+| **Web/WordPress loopback E2E** | `tests/web_posture_e2e.rs` | Exact request methods and counts, no redirect follow, HEAD fallback Range request, bounded WordPress body prefix, malformed response and timeout outcomes. | Internet targets, real server variants, or application vulnerability. |
 | **Local UI unit** | `src/web_ui.rs` | Local-only Web/WordPress UI copy, language-selector coverage, and JSON error response shape. | Browser rendering, a live local listener, or a real external site. |
 | **Schema** | `tests/schema_test.rs` + `docs/report.schema.json` | The JSON report conforms to the published schema (the integration contract). | Semantic correctness of values. |
 | **Unit** | `#[cfg(test)]` in `src/**` (e.g. `parser.rs`, `severity.rs`) | Small pure helpers (attribute parsing, severity mapping). | Cross-module behaviour. |
@@ -18,10 +19,10 @@ behaviour named in its final column.
 
 There is **no live-DC or live-external-target end-to-end test** in CI. The
 detection layer uses representative objects; integration tests cover LDAP
-filters and KDC parsing; Web/WordPress/UI tests cover only bounded parsing and
-local response contracts. Plan validation, bounded execution, and checkpoint
-tamper rejection run locally. Benchmarks remain methodology only in
-[BENCHMARKS.md](BENCHMARKS.md).
+filters and KDC parsing; Web/WordPress tests include deterministic loopback
+responses, while UI tests cover copy and response contracts. Plan validation,
+bounded execution, and checkpoint tamper rejection run locally. Benchmarks
+remain methodology only in [BENCHMARKS.md](BENCHMARKS.md).
 
 ## Running
 
