@@ -20,6 +20,7 @@
   "$defs": {
     "severity": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
     "confidence": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"] },
+    "outcome": { "type": "string", "enum": ["confirmed", "exposed", "inconclusive", "unavailable"] },
     "scanContext": {
       "type": "object",
       "required": ["dc_ip", "domain", "username", "privilege_level", "modules_run", "duration_secs"],
@@ -42,6 +43,7 @@
         "module": { "type": "string" },
         "severity": { "$ref": "#/$defs/severity" },
         "confidence": { "$ref": "#/$defs/confidence" },
+        "outcome": { "$ref": "#/$defs/outcome" },
         "title": { "type": "string" },
         "description": { "type": "string" },
         "evidence": true,

@@ -67,6 +67,32 @@ impl std::fmt::Display for Confidence {
     }
 }
 
+/// What the probe actually established. This is independent of severity and
+/// confidence: an exposed endpoint is not a confirmed vulnerability.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Outcome {
+    Confirmed,
+    Exposed,
+    Inconclusive,
+    Unavailable,
+}
+
+impl std::fmt::Display for Outcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Confirmed => "confirmed",
+                Self::Exposed => "exposed",
+                Self::Inconclusive => "inconclusive",
+                Self::Unavailable => "unavailable",
+            }
+        )
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Finding {
     pub id: String,
@@ -77,6 +103,9 @@ pub struct Finding {
     /// (which lack this field) still deserialize for `--baseline` diffs.
     #[serde(default)]
     pub confidence: Confidence,
+    /// Optional for older modules and baseline reports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<Outcome>,
     pub title: String,
     pub description: String,
     pub evidence: serde_json::Value,
@@ -109,6 +138,7 @@ impl Finding {
             module: module.into(),
             severity,
             confidence: Confidence::High,
+            outcome: None,
             title: title.into(),
             description: description.into(),
             evidence,
@@ -141,6 +171,11 @@ impl Finding {
     /// Builder: set detection confidence (defaults to `High`).
     pub fn with_confidence(mut self, confidence: Confidence) -> Self {
         self.confidence = confidence;
+        self
+    }
+
+    pub fn with_outcome(mut self, outcome: Outcome) -> Self {
+        self.outcome = Some(outcome);
         self
     }
 

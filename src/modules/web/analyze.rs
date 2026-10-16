@@ -132,7 +132,7 @@ pub fn analyze(
             )
             .evidence("target", target)
             .evidence("status", status.to_string())]
-        } else {
+        } else if (200..300).contains(&status) {
             vec![Issue::new(
                 "WEB-HTTPS-REDIRECT-MISSING",
                 Sev::High,
@@ -143,16 +143,25 @@ pub fn analyze(
             )
             .evidence("target", target)
             .evidence("status", status.to_string())]
+        } else {
+            vec![Issue::new(
+                "WEB-RESPONSE-INCONCLUSIVE",
+                Sev::Info,
+                Conf::High,
+                "HTTP response does not establish redirect policy",
+                "The HTTP response was not a successful page or a direct HTTPS redirect. The destination was not followed.",
+                &[],
+            ).evidence("target", target).evidence("status", status.to_string())]
         };
     }
 
-    if !(200..400).contains(&status) {
+    if !(200..300).contains(&status) {
         return vec![Issue::new(
             "WEB-RESPONSE-INCONCLUSIVE",
             Sev::Info,
             Conf::High,
             "HTTPS response does not permit a header posture conclusion",
-            "The explicitly requested HTTPS URL returned a status outside the 2xx/3xx range. Header findings are omitted because error responses often use a different server or policy.",
+            "The explicitly requested HTTPS URL did not return a successful response. Redirects were not followed; their headers and error-page headers do not establish the destination's posture.",
             &[],
         )
         .evidence("target", target)
@@ -349,6 +358,22 @@ mod tests {
         let issues = analyze("https://example.test/missing", true, 404, &[]);
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].id, "WEB-RESPONSE-INCONCLUSIVE");
+    }
+
+    #[test]
+    fn unfollowed_redirects_do_not_claim_destination_header_posture() {
+        let https = analyze("https://example.test/", true, 302, &[]);
+        assert_eq!(https.len(), 1);
+        assert_eq!(https[0].id, "WEB-RESPONSE-INCONCLUSIVE");
+
+        let http = analyze(
+            "http://example.test/",
+            false,
+            302,
+            &headers(&[("Location", "/elsewhere")]),
+        );
+        assert_eq!(http.len(), 1);
+        assert_eq!(http[0].id, "WEB-RESPONSE-INCONCLUSIVE");
     }
 
     #[test]

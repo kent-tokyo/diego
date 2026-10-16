@@ -99,6 +99,9 @@ pub fn generate(report: &Report) -> String {
             icon, f.severity, f.confidence, f.title, f.id
         ));
         out.push_str(&format!("**Module**: `{}`", f.module));
+        if let Some(outcome) = f.outcome {
+            out.push_str(&format!(" | **Outcome**: `{outcome}`"));
+        }
         if let Some(mitre) = &f.mitre_id {
             out.push_str(&format!(" | **MITRE**: [{mitre}](https://attack.mitre.org/techniques/{}/)", mitre.replace('.', "/")));
         }
